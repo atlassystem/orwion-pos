@@ -1,15 +1,5 @@
-import { ThreeItemGrid } from "@/components/grid/three-items";
-import { Carousel } from "@/components/carousel";
-
-export const metadata = {
-  description: "A clean storefront base scaffolded for Lezzet POS.",
-};
+import { PosApp } from "@/components/pos/pos-app";
 
 export default function HomePage() {
-  return (
-    <>
-      <ThreeItemGrid />
-      <Carousel />
-    </>
-  );
+  return <PosApp />;
 }

@@ -7,9 +7,19 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sora), var(--font-jakarta), ui-sans-serif, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
+
+  /* Lezzet POS — sıcak palet */
+  --color-espresso: #17120f;
+  --color-espresso2: #211a15;
+  --color-sand: #f4f1ec;
+  --color-cream: #fbfaf7;
+  --color-amber0: #e7843c;
+  --color-amber1: #d96b2a;
+  --color-gold: #e5b25a;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -138,4 +148,65 @@
   html {
     @apply font-sans;
   }
+}
+
+/* ---------- Lezzet POS yardımcı sınıflar (index.html birebir) ---------- */
+html,
+body {
+  margin: 0;
+  background: #efebe4;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cfc7ba;
+  border-radius: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.soft {
+  box-shadow:
+    0 1px 2px rgba(23, 18, 15, 0.04),
+    0 8px 24px -12px rgba(23, 18, 15, 0.18);
+}
+.soft-lg {
+  box-shadow:
+    0 2px 4px rgba(23, 18, 15, 0.05),
+    0 22px 48px -22px rgba(23, 18, 15, 0.3);
+}
+.lift {
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.lift:hover {
+  transform: translateY(-3px);
+}
+.fade-img {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.fade-img.on {
+  opacity: 1;
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.pop {
+  animation: pop 0.18s ease both;
 }
