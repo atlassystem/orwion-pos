@@ -1,9 +1,15 @@
-export default function Home() {
+import { ThreeItemGrid } from "@/components/grid/three-items";
+import { Carousel } from "@/components/carousel";
+
+export const metadata = {
+  description: "A clean storefront base scaffolded for Lezzet POS.",
+};
+
+export default function HomePage() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="text-muted-foreground">
-        Clone target not yet built. Run <code className="font-mono text-foreground">/clone-website</code> to start.
-      </p>
-    </main>
+    <>
+      <ThreeItemGrid />
+      <Carousel />
+    </>
   );
 }
