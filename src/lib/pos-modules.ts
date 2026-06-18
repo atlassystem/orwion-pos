@@ -40,8 +40,47 @@ export const STOCK_CATS = [
   "İçecek",
 ];
 
+export const stockById: Record<string, StockItem> = Object.fromEntries(
+  STOCK.map((s) => [s.id, s]),
+);
+
 export const stockValue = (s: StockItem) => s.qty * s.cost;
 export const isLow = (s: StockItem) => s.qty <= s.min;
+
+/* ---------- Reçeteler (menü ürünü → stok malzemeleri) ---------- */
+export interface RecipeLine {
+  stockId: string;
+  qty: number; // stok biriminde tüketilen miktar (örn. 0.25 kg)
+}
+
+/** Ürün id → malzeme satırları. Tanımsız ürünlerin reçetesi yoktur. */
+export const RECIPES: Record<string, RecipeLine[]> = {
+  // Başlangıç & Çorba
+  p1: [{ stockId: "s8", qty: 0.3 }, { stockId: "s6", qty: 0.1 }, { stockId: "s11", qty: 0.02 }],
+  p4: [{ stockId: "s5", qty: 0.15 }, { stockId: "s4", qty: 0.05 }],
+  c1: [{ stockId: "s7", qty: 0.03 }, { stockId: "s9", qty: 0.02 }, { stockId: "s11", qty: 0.01 }],
+  c2: [{ stockId: "s10", qty: 0.03 }, { stockId: "s7", qty: 0.03 }],
+  c3: [{ stockId: "s6", qty: 0.2 }, { stockId: "s9", qty: 0.02 }],
+  // Izgara
+  i1: [{ stockId: "s1", qty: 0.25 }, { stockId: "s7", qty: 0.05 }, { stockId: "s11", qty: 0.02 }],
+  i2: [{ stockId: "s1", qty: 0.2 }, { stockId: "s7", qty: 0.05 }],
+  i3: [{ stockId: "s2", qty: 0.25 }, { stockId: "s11", qty: 0.02 }],
+  i4: [{ stockId: "s3", qty: 0.3 }],
+  i5: [{ stockId: "s1", qty: 0.15 }, { stockId: "s2", qty: 0.12 }, { stockId: "s3", qty: 0.12 }],
+  // Pizza & Makarna
+  z1: [{ stockId: "s9", qty: 0.25 }, { stockId: "s4", qty: 0.15 }, { stockId: "s6", qty: 0.1 }],
+  z2: [{ stockId: "s9", qty: 0.25 }, { stockId: "s4", qty: 0.15 }, { stockId: "s6", qty: 0.1 }, { stockId: "s1", qty: 0.08 }],
+  z3: [{ stockId: "s9", qty: 0.2 }, { stockId: "s6", qty: 0.15 }, { stockId: "s11", qty: 0.02 }],
+  z4: [{ stockId: "s9", qty: 0.2 }, { stockId: "s1", qty: 0.12 }, { stockId: "s6", qty: 0.12 }],
+  // İçecek (paket/kasa)
+  d1: [{ stockId: "s13", qty: 0.05 }],
+  d2: [{ stockId: "s12", qty: 0.04 }],
+  d5: [{ stockId: "s14", qty: 0.004 }],
+};
+
+/** Reçetenin malzeme maliyeti toplamı (₺). */
+export const recipeCost = (lines: RecipeLine[]): number =>
+  lines.reduce((s, l) => s + (stockById[l.stockId]?.cost ?? 0) * l.qty, 0);
 
 /* ---------- Yetkilendirme (RBAC) ---------- */
 /** Sidebar modül kimlikleri — sidebar View ile birebir aynı. */
