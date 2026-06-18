@@ -9,6 +9,7 @@ import {
   Star,
   Coffee,
   ShieldCheck,
+  SquarePen,
   X,
   Check,
 } from "lucide-react";
@@ -34,14 +35,18 @@ export function Personel({
   setStaff: Dispatch<SetStateAction<Staff[]>>;
   canManage: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  // null = kapalı, "new" = ekleme, Staff = düzenleme
+  const [editing, setEditing] = useState<Staff | "new" | null>(null);
 
   const aktif = staff.filter((s) => s.state !== "cikis");
   const vardiyada = staff.filter((s) => s.state === "vardiyada");
   const toplamSaat = staff.reduce((s, u) => s + u.hoursToday, 0);
   const enIyi = [...staff].sort((a, b) => b.salesToday - a.salesToday)[0];
 
-  const addStaff = (s: Staff) => setStaff((prev) => [...prev, s]);
+  const upsert = (s: Staff) =>
+    setStaff((prev) =>
+      prev.some((x) => x.id === s.id) ? prev.map((x) => (x.id === s.id ? s : x)) : [...prev, s],
+    );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -50,7 +55,7 @@ export function Personel({
         icon={Users}
         sub={aktif.length + " aktif personel · " + vardiyada.length + " vardiyada"}
         right={
-          <PrimaryButton icon={UserPlus} onClick={() => canManage && setOpen(true)}>
+          <PrimaryButton icon={UserPlus} onClick={() => canManage && setEditing("new")}>
             Personel Ekle
           </PrimaryButton>
         }
@@ -72,17 +77,18 @@ export function Personel({
       <div className="scroll-light overflow-y-auto px-7 pb-7">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {staff.map((u) => (
-            <StaffCard key={u.id} u={u} />
+            <StaffCard key={u.id} u={u} canManage={canManage} onEdit={() => setEditing(u)} />
           ))}
         </div>
       </div>
 
-      {open && (
-        <AddStaffModal
-          onClose={() => setOpen(false)}
+      {editing && (
+        <StaffModal
+          initial={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(null)}
           onSave={(s) => {
-            addStaff(s);
-            setOpen(false);
+            upsert(s);
+            setEditing(null);
           }}
         />
       )}
@@ -90,7 +96,15 @@ export function Personel({
   );
 }
 
-function StaffCard({ u }: { u: Staff }) {
+function StaffCard({
+  u,
+  canManage,
+  onEdit,
+}: {
+  u: Staff;
+  canManage: boolean;
+  onEdit: () => void;
+}) {
   const sh = SHIFT[u.state];
   const lvl = LEVELS[u.level];
   const off = u.state === "cikis";
@@ -132,9 +146,20 @@ function StaffCard({ u }: { u: Staff }) {
             <ShieldCheck className="h-3.5 w-3.5 text-ink3" strokeWidth={2.2} />
             Yetki
           </span>
-          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", lvl.chip)}>
-            {lvl.label}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", lvl.chip)}>
+              {lvl.label}
+            </span>
+            {canManage && (
+              <button
+                onClick={onEdit}
+                aria-label="Düzenle"
+                className="grid h-6 w-6 place-items-center rounded-lg text-ink3 transition hover:bg-white hover:text-brand"
+              >
+                <SquarePen className="h-3.5 w-3.5" strokeWidth={2.2} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-ink3">{scopeLabel}</div>
       </div>
@@ -167,17 +192,19 @@ function StaffCard({ u }: { u: Staff }) {
 /* ============================================================
    Personel Ekle — çalışır form (isim, rol, yetki seviyesi, erişim)
    ============================================================ */
-function AddStaffModal({
+function StaffModal({
+  initial,
   onClose,
   onSave,
 }: {
+  initial?: Staff;
   onClose: () => void;
   onSave: (s: Staff) => void;
 }) {
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("Garson");
-  const [level, setLevel] = useState<AccessLevel>("personel");
-  const [access, setAccess] = useState<ModuleId[]>(["siramatik"]);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [role, setRole] = useState(initial?.role ?? "Garson");
+  const [level, setLevel] = useState<AccessLevel>(initial?.level ?? "personel");
+  const [access, setAccess] = useState<ModuleId[]>(initial?.access ?? ["siramatik"]);
 
   const scoped = LEVELS[level].scoped;
   const valid = name.trim().length > 1 && (!scoped || access.length > 0);
@@ -195,15 +222,15 @@ function AddStaffModal({
         .map((w) => w[0]?.toLocaleUpperCase("tr-TR") ?? "")
         .join("") || "??";
     onSave({
-      id: "u" + Date.now(),
+      id: initial?.id ?? "u" + Date.now(),
       name: name.trim(),
       role: role.trim() || "Personel",
       initials,
-      state: "vardiyada",
-      clockIn: "—",
-      hoursToday: 0,
-      salesToday: 0,
-      rating: 0,
+      state: initial?.state ?? "vardiyada",
+      clockIn: initial?.clockIn ?? "—",
+      hoursToday: initial?.hoursToday ?? 0,
+      salesToday: initial?.salesToday ?? 0,
+      rating: initial?.rating ?? 0,
       level,
       access: scoped ? access : ALL_MODULES,
     });
@@ -215,7 +242,7 @@ function AddStaffModal({
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <h3 className="flex items-center gap-2 font-display text-lg font-extrabold text-ink">
             <UserPlus className="h-5 w-5 text-brand" strokeWidth={2.2} />
-            Personel Ekle
+            {initial ? "Personel Düzenle" : "Personel Ekle"}
           </h3>
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-ink3 transition hover:bg-surface2 hover:text-ink">
             <X className="h-4.5 w-4.5" strokeWidth={2.2} />

@@ -17,15 +17,11 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  SNACK_MENU,
-  snackById,
-  STATION_META,
-  type Station,
-  type SnackState,
-} from "@/lib/pos-modules";
+import { CATS, PRODUCTS, prodById, type Route } from "@/lib/pos-data";
+import { STATION_META, type SnackState } from "@/lib/pos-modules";
 import { Tab, TopBar } from "./ui";
 import { usePerms } from "./perms";
+import { Food } from "./food";
 
 interface Line {
   id: string;
@@ -39,12 +35,13 @@ interface Ticket {
   min: number;
 }
 
+/** Başlangıç (demo) fişleri — Menü ürün id'leriyle. */
 const SEED: Ticket[] = [
-  { no: 146, room: "412", items: [{ id: "burger", qty: 1 }, { id: "fries", qty: 1 }, { id: "cola", qty: 2 }], state: "hazir", min: 6 },
-  { no: 147, room: "228", items: [{ id: "tost", qty: 2 }, { id: "cay", qty: 2 }, { id: "icecream", qty: 1 }], state: "hazirlaniyor", min: 3 },
+  { no: 146, room: "412", items: [{ id: "i2", qty: 1 }, { id: "d2", qty: 2 }], state: "hazir", min: 6 },
+  { no: 147, room: "228", items: [{ id: "z1", qty: 1 }, { id: "d4", qty: 2 }, { id: "t1", qty: 1 }], state: "hazirlaniyor", min: 3 },
 ];
 
-const stationOf = (id: string): Station => snackById[id]?.station ?? "mutfak";
+const stationOf = (id: string): Route => prodById[id]?.route ?? "mutfak";
 const splitByStation = (items: Line[]) => ({
   mutfak: items.filter((i) => stationOf(i.id) === "mutfak"),
   bar: items.filter((i) => stationOf(i.id) === "bar"),
@@ -74,7 +71,7 @@ export function Siramatik() {
       <TopBar
         title="Sıramatik — Snack Bar"
         icon={TicketCheck}
-        sub="Her şey dahil · kiosk siparişi, sıra numarası ve çağrı ekranı"
+        sub="Her şey dahil · menüden sipariş, sıra numarası ve çağrı ekranı"
         right={
           <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-bold text-brand">
             ✦ Her Şey Dahil
@@ -121,16 +118,16 @@ export function Siramatik() {
 }
 
 /* ============================================================
-   Kiosk — sipariş girişi (ödeme yok), sıra no + fiş önizleme
+   Kiosk — Menü ürünlerinden sipariş (ödeme yok), sıra no + fiş
    ============================================================ */
 function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number }) {
   const { canEdit } = usePerms();
-  const [filter, setFilter] = useState<"hepsi" | Station>("hepsi");
+  const [cat, setCat] = useState("hepsi");
   const [cart, setCart] = useState<Line[]>([]);
   const [room, setRoom] = useState("");
   const [printed, setPrinted] = useState<Ticket | null>(null);
 
-  const list = SNACK_MENU.filter((s) => (filter === "hepsi" ? true : s.station === filter));
+  const list = PRODUCTS.filter((p) => (cat === "hepsi" ? true : p.cat === cat));
   const count = cart.reduce((a, i) => a + i.qty, 0);
 
   const add = (id: string) =>
@@ -153,43 +150,62 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
 
   return (
     <div className="relative grid min-h-0 flex-1 grid-cols-[1fr_360px] gap-4 overflow-hidden px-7 pb-7">
-      {/* SOL: menü */}
+      {/* SOL: menü (Menü Yönetimi'ndeki tüm ürünler) */}
       <div className="flex min-h-0 flex-col">
-        <div className="mb-3 flex items-center gap-2">
-          {(["hepsi", "mutfak", "bar"] as const).map((f) => (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setCat("hepsi")}
+            className={cn(
+              "rounded-xl px-3.5 py-2 text-sm font-semibold ring-1 transition",
+              cat === "hepsi"
+                ? "bg-brand text-white ring-brand/0 shadow-sm shadow-brand/30"
+                : "bg-white text-ink2 ring-line2 hover:bg-surface2 hover:text-ink",
+            )}
+          >
+            Tümü
+          </button>
+          {CATS.map((c) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
+              key={c.id}
+              onClick={() => setCat(c.id)}
               className={cn(
                 "rounded-xl px-3.5 py-2 text-sm font-semibold ring-1 transition",
-                filter === f
+                cat === c.id
                   ? "bg-brand text-white ring-brand/0 shadow-sm shadow-brand/30"
                   : "bg-white text-ink2 ring-line2 hover:bg-surface2 hover:text-ink",
               )}
             >
-              {f === "hepsi" ? "Tümü" : `${STATION_META[f].emoji} ${STATION_META[f].label}`}
+              {c.name}
             </button>
           ))}
         </div>
-        <div className="scroll-light grid min-h-0 flex-1 grid-cols-3 content-start gap-3 overflow-y-auto pr-1 sm:grid-cols-4 lg:grid-cols-5">
-          {list.map((s) => (
+        <div className="scroll-light grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
+          {list.map((p) => (
             <button
-              key={s.id}
-              onClick={() => add(s.id)}
-              className="lift flex flex-col items-center gap-1.5 rounded-2xl border border-line bg-white py-4 transition hover:border-brand/40 hover:bg-brand-soft/40"
+              key={p.id}
+              onClick={() => add(p.id)}
+              disabled={!canEdit}
+              className="group pos-card lift overflow-hidden text-left disabled:pointer-events-none disabled:opacity-60"
             >
-              <span className="text-3xl">{s.emoji}</span>
-              <span className="px-1 text-center text-[12px] leading-tight font-bold text-ink">
-                {s.name}
-              </span>
-              <span
-                className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[9px] font-bold",
-                  STATION_META[s.station].chip,
-                )}
-              >
-                {STATION_META[s.station].label}
-              </span>
+              <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-20 w-full" />
+              <div className="flex items-center justify-between gap-1 px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="line-clamp-1 text-[13px] leading-tight font-bold text-ink">
+                    {p.name}
+                  </div>
+                  <span
+                    className={cn(
+                      "mt-0.5 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-bold",
+                      STATION_META[p.route].chip,
+                    )}
+                  >
+                    {STATION_META[p.route].label}
+                  </span>
+                </div>
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-surface2 text-ink2 ring-1 ring-line transition group-hover:bg-brand group-hover:text-white group-hover:ring-brand">
+                  <Plus className="h-3.5 w-3.5" strokeWidth={3} />
+                </span>
+              </div>
             </button>
           ))}
         </div>
@@ -205,7 +221,6 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
           <span className="text-[11px] font-semibold text-ink3">{count} ürün</span>
         </div>
 
-        {/* Oda no */}
         <div className="px-5 pt-3">
           <label className="flex items-center gap-2.5 rounded-xl border border-line2 bg-surface2 px-3.5 py-2.5 transition focus-within:border-brand/60 focus-within:bg-white">
             <DoorOpen className="h-4.5 w-4.5 shrink-0 text-ink3" strokeWidth={2} />
@@ -223,7 +238,7 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
             <div className="grid h-full place-items-center px-6 text-center text-sm text-ink3">
               <div>
                 <ConciergeBell className="mx-auto mb-2 h-8 w-8 text-ink3/60" strokeWidth={1.6} />
-                Soldaki ürünlere dokunarak
+                Soldaki menü ürünlerine dokunarak
                 <br />
                 sipariş oluşturun
               </div>
@@ -231,24 +246,22 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
           ) : (
             <div className="space-y-2">
               {cart.map((i) => {
-                const s = snackById[i.id];
+                const p = prodById[i.id];
                 return (
                   <div key={i.id} className="flex items-center gap-3 rounded-xl border border-line bg-surface2 p-2">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-lg ring-1 ring-line">
-                      {s.emoji}
-                    </span>
+                    <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-10 w-10 shrink-0 rounded-lg" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-bold text-ink">{s.name}</div>
+                      <div className="truncate text-sm font-bold text-ink">{p.name}</div>
                       <div className="text-[10px] font-semibold text-ink3">
-                        {STATION_META[s.station].label}
+                        {STATION_META[p.route].label}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => dec(i.id)} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-rose-50 hover:text-rose-600">
+                      <button onClick={() => dec(i.id)} disabled={!canEdit} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40">
                         <Minus className="h-3.5 w-3.5" strokeWidth={2.6} />
                       </button>
                       <span className="tnum w-5 text-center font-bold text-ink">{i.qty}</span>
-                      <button onClick={() => add(i.id)} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-emerald-50 hover:text-emerald-600">
+                      <button onClick={() => add(i.id)} disabled={!canEdit} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40">
                         <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
                       </button>
                     </div>
@@ -274,7 +287,6 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
         </div>
       </div>
 
-      {/* Fiş / sıra no önizleme */}
       {printed && <PrintPreview ticket={printed} onClose={() => setPrinted(null)} />}
     </div>
   );
@@ -285,19 +297,15 @@ function PrintPreview({ ticket, onClose }: { ticket: Ticket; onClose: () => void
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-ink/40 p-6 backdrop-blur-sm">
       <div className="pop w-full max-w-sm overflow-hidden rounded-[1.25rem] bg-white shadow-2xl">
-        {/* Sıra no başlık */}
         <div className="bg-gradient-to-br from-brand to-brand2 px-6 py-6 text-center text-white">
           <div className="text-[11px] font-bold tracking-widest uppercase opacity-80">
             Sıra Numaranız
           </div>
-          <div className="font-display text-6xl font-extrabold tnum leading-none">
-            {ticket.no}
-          </div>
+          <div className="font-display text-6xl font-extrabold tnum leading-none">{ticket.no}</div>
           <div className="mt-1 text-[12px] font-semibold opacity-90">
             Oda {ticket.room} · sıranız ekranda yanınca alın
           </div>
         </div>
-        {/* Fiş içeriği */}
         <div className="space-y-3 px-6 py-5">
           <StationLines title="🍳 Mutfak" lines={grp.mutfak} />
           <StationLines title="🍹 Bar" lines={grp.bar} />
@@ -329,8 +337,8 @@ function StationLines({ title, lines }: { title: string; lines: Line[] }) {
         {lines.map((i) => (
           <div key={i.id} className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2 text-ink">
-              <span className="text-base">{snackById[i.id].emoji}</span>
-              {snackById[i.id].name}
+              <span className="text-base">{prodById[i.id].emoji}</span>
+              {prodById[i.id].name}
             </span>
             <span className="tnum font-bold text-ink2">×{i.qty}</span>
           </div>
@@ -406,7 +414,7 @@ function KuyrukStation({ title, lines }: { title: string; lines: Line[] }) {
                 {i.qty}
               </span>
               <span className="text-ink">
-                {snackById[i.id].emoji} {snackById[i.id].name}
+                {prodById[i.id].emoji} {prodById[i.id].name}
               </span>
             </div>
           ))}
@@ -466,9 +474,7 @@ function Ekran({
                   <div className="font-display text-6xl font-extrabold tnum leading-none text-emerald-300 blink">
                     {t.no}
                   </div>
-                  <div className="mt-2 text-[12px] font-semibold text-white/60">
-                    Oda {t.room}
-                  </div>
+                  <div className="mt-2 text-[12px] font-semibold text-white/60">Oda {t.room}</div>
                   <div className="mt-1 text-[10px] font-bold text-emerald-300/0 transition group-hover:text-emerald-300">
                     teslim et
                   </div>

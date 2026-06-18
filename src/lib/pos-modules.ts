@@ -186,50 +186,13 @@ export const COMING_MODULES: ModuleCard[] = [
    misafire sıra numarası verilir → hazır olunca çağrı ekranında yanar.
    Ödeme yok (her şey dahil); misafir oda numarasıyla tanımlanır.
    ============================================================ */
+/** Hazırlık istasyonu — Menü ürünlerinin route'u (mutfak/bar) ile birebir. */
 export type Station = "mutfak" | "bar";
-
-export interface SnackItem {
-  id: string;
-  name: string;
-  emoji: string;
-  station: Station; // fiş bu istasyona düşer
-}
-
-/** Snack bar menüsü — fiyat yok (her şey dahil). */
-export const SNACK_MENU: SnackItem[] = [
-  // Mutfak
-  { id: "burger", name: "Hamburger", emoji: "🍔", station: "mutfak" },
-  { id: "cheese", name: "Cheeseburger", emoji: "🧀", station: "mutfak" },
-  { id: "fries", name: "Patates Kızartması", emoji: "🍟", station: "mutfak" },
-  { id: "nugget", name: "Tavuk Nugget", emoji: "🍗", station: "mutfak" },
-  { id: "tost", name: "Karışık Tost", emoji: "🥪", station: "mutfak" },
-  { id: "slice", name: "Dilim Pizza", emoji: "🍕", station: "mutfak" },
-  { id: "wrap", name: "Tavuk Dürüm", emoji: "🌯", station: "mutfak" },
-  { id: "hotdog", name: "Sosisli", emoji: "🌭", station: "mutfak" },
-  // Bar
-  { id: "cola", name: "Kola", emoji: "🥤", station: "bar" },
-  { id: "ayran", name: "Ayran", emoji: "🥛", station: "bar" },
-  { id: "cay", name: "Çay", emoji: "🫖", station: "bar" },
-  { id: "kahve", name: "Kahve", emoji: "☕", station: "bar" },
-  { id: "limonata", name: "Limonata", emoji: "🍋", station: "bar" },
-  { id: "shake", name: "Milkshake", emoji: "🥤", station: "bar" },
-  { id: "icecream", name: "Dondurma", emoji: "🍦", station: "bar" },
-  { id: "mocktail", name: "Kokteyl (alkolsüz)", emoji: "🍹", station: "bar" },
-];
-
-export const snackById: Record<string, SnackItem> = Object.fromEntries(
-  SNACK_MENU.map((s) => [s.id, s]),
-);
 
 export const STATION_META: Record<Station, { label: string; emoji: string; chip: string }> = {
   mutfak: { label: "Mutfak", emoji: "🍳", chip: "bg-orange-100 text-orange-700" },
   bar: { label: "Bar", emoji: "🍹", chip: "bg-sky-100 text-sky-700" },
 };
 
+/** Sıramatik fiş durumu. */
 export type SnackState = "hazirlaniyor" | "hazir" | "teslim";
-
-export const SNACK_STATE: Record<SnackState, { label: string; chip: string; dot: string }> = {
-  hazirlaniyor: { label: "Hazırlanıyor", chip: "bg-amber-100 text-amber-700", dot: "#f59e0b" },
-  hazir: { label: "Hazır", chip: "bg-emerald-100 text-emerald-700", dot: "#10b981" },
-  teslim: { label: "Teslim", chip: "bg-slate-100 text-slate-500", dot: "#94a3b8" },
-};
