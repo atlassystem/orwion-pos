@@ -15,13 +15,17 @@ import {
   ChevronsUpDown,
   HelpCircle,
   MoreVertical,
+  ConciergeBell,
+  TicketCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
 
 export type View =
   | "masalar"
+  | "garson"
   | "mutfak"
+  | "siramatik"
   | "menu"
   | "stok"
   | "personel"
@@ -39,7 +43,9 @@ const GROUPS: {
     label: "Menü",
     items: [
       { id: "masalar", label: "Masa Planı", ic: LayoutGrid },
+      { id: "garson", label: "Garson Terminali", ic: ConciergeBell },
       { id: "mutfak", label: "Mutfak (KDS)", ic: ChefHat },
+      { id: "siramatik", label: "Sıramatik", ic: TicketCheck },
       { id: "menu", label: "Menü Yönetimi", ic: BookOpen },
       { id: "stok", label: "Stok & Envanter", ic: Boxes, badge: "3" },
       { id: "personel", label: "Personel", ic: Users },

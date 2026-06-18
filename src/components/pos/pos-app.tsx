@@ -5,7 +5,9 @@ import { seedTables, type Table } from "@/lib/pos-data";
 import { Sidebar, type View } from "./sidebar";
 import { Masalar } from "./masalar";
 import { Adisyon } from "./adisyon";
+import { Garson } from "./garson";
 import { Mutfak } from "./mutfak";
+import { Siramatik } from "./siramatik";
 import { Menu } from "./menu";
 import { Rapor } from "./rapor";
 import { Stok } from "./stok";
@@ -77,6 +79,8 @@ export function PosApp() {
   };
 
   const openTableObj = tables.find((t) => t.no === openNo);
+  // Masa Planı ve Garson Terminali, açık masada ortak Adisyon ekranını paylaşır.
+  const inAdisyon = openTableObj && (view === "masalar" || view === "garson");
 
   if (!authed) return <Login onLogin={() => setAuthed(true)} />;
 
@@ -84,16 +88,7 @@ export function PosApp() {
     <div className="pos-canvas flex h-screen w-screen overflow-hidden font-sans text-ink">
       <Sidebar view={view} setView={goView} />
       <main className="flex min-w-0 flex-1 flex-col">
-        {view === "masalar" && !openTableObj && (
-          <Masalar
-            tables={tables}
-            activeHall={activeHall}
-            setActiveHall={setActiveHall}
-            onOpen={setOpenNo}
-            clockMin={clockMin}
-          />
-        )}
-        {view === "masalar" && openTableObj && (
+        {inAdisyon && openTableObj && (
           <Adisyon
             t={openTableObj}
             onBack={() => setOpenNo(null)}
@@ -104,7 +99,20 @@ export function PosApp() {
             clockMin={clockMin}
           />
         )}
+        {!inAdisyon && view === "masalar" && (
+          <Masalar
+            tables={tables}
+            activeHall={activeHall}
+            setActiveHall={setActiveHall}
+            onOpen={setOpenNo}
+            clockMin={clockMin}
+          />
+        )}
+        {!inAdisyon && view === "garson" && (
+          <Garson tables={tables} onOpen={setOpenNo} clockMin={clockMin} />
+        )}
         {view === "mutfak" && <Mutfak tables={tables} clockMin={clockMin} />}
+        {view === "siramatik" && <Siramatik />}
         {view === "menu" && <Menu />}
         {view === "stok" && <Stok />}
         {view === "personel" && <Personel />}
