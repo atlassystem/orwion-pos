@@ -43,6 +43,70 @@ export const STOCK_CATS = [
 export const stockValue = (s: StockItem) => s.qty * s.cost;
 export const isLow = (s: StockItem) => s.qty <= s.min;
 
+/* ---------- Yetkilendirme (RBAC) ---------- */
+/** Sidebar modül kimlikleri — sidebar View ile birebir aynı. */
+export type ModuleId =
+  | "masalar"
+  | "garson"
+  | "mutfak"
+  | "siramatik"
+  | "menu"
+  | "stok"
+  | "personel"
+  | "rapor"
+  | "subeler"
+  | "ayarlar";
+
+export const MODULES: { id: ModuleId; label: string }[] = [
+  { id: "masalar", label: "Masa Planı" },
+  { id: "garson", label: "Garson Terminali" },
+  { id: "mutfak", label: "Mutfak (KDS)" },
+  { id: "siramatik", label: "Sıramatik" },
+  { id: "menu", label: "Menü Yönetimi" },
+  { id: "stok", label: "Stok & Envanter" },
+  { id: "personel", label: "Personel" },
+  { id: "rapor", label: "Raporlar" },
+  { id: "subeler", label: "Şubeler" },
+  { id: "ayarlar", label: "Ayarlar" },
+];
+
+export const ALL_MODULES: ModuleId[] = MODULES.map((m) => m.id);
+
+/**
+ * Yetki seviyeleri:
+ * - admin: her yere erişir ve düzenler
+ * - yonetici: her yeri görür ama düzenleyemez (salt-okunur)
+ * - personel: yalnızca atanan modülleri görür ve düzenler
+ */
+export type AccessLevel = "admin" | "yonetici" | "personel";
+
+export const LEVELS: Record<
+  AccessLevel,
+  { label: string; desc: string; canEdit: boolean; scoped: boolean; chip: string }
+> = {
+  admin: {
+    label: "Admin",
+    desc: "Tüm alanlara erişir ve düzenler",
+    canEdit: true,
+    scoped: false,
+    chip: "bg-brand-soft text-brand",
+  },
+  yonetici: {
+    label: "Yönetici",
+    desc: "Her yeri görür, düzenleyemez (salt-okunur)",
+    canEdit: false,
+    scoped: false,
+    chip: "bg-sky-100 text-sky-700",
+  },
+  personel: {
+    label: "Personel",
+    desc: "Yalnızca atanan alanları görür ve düzenler",
+    canEdit: true,
+    scoped: true,
+    chip: "bg-slate-100 text-slate-600",
+  },
+};
+
 /* ---------- Personel / İş Gücü ---------- */
 export type ShiftState = "vardiyada" | "molada" | "cikis";
 
@@ -56,18 +120,28 @@ export interface Staff {
   hoursToday: number;
   salesToday: number; // bugün getirdiği ciro (₺)
   rating: number; // 0-5
+  level: AccessLevel;
+  /** Sadece "personel" seviyesinde anlamlı; admin/yönetici tüm modülleri görür. */
+  access: ModuleId[];
 }
 
 export const STAFF: Staff[] = [
-  { id: "u1", name: "Ahmet Yılmaz", role: "Garson", initials: "AY", state: "vardiyada", clockIn: "10:00", hoursToday: 6.5, salesToday: 8420, rating: 4.8 },
-  { id: "u2", name: "Selin Kaya", role: "Garson", initials: "SK", state: "vardiyada", clockIn: "10:00", hoursToday: 6.5, salesToday: 9650, rating: 4.9 },
-  { id: "u3", name: "Murat Demir", role: "Garson", initials: "MD", state: "molada", clockIn: "11:00", hoursToday: 5.5, salesToday: 6230, rating: 4.6 },
-  { id: "u4", name: "Elif Şahin", role: "Kasiyer", initials: "EŞ", state: "vardiyada", clockIn: "09:00", hoursToday: 7.5, salesToday: 0, rating: 4.7 },
-  { id: "u5", name: "Can Aydın", role: "Şef", initials: "CA", state: "vardiyada", clockIn: "08:30", hoursToday: 8, salesToday: 0, rating: 4.9 },
-  { id: "u6", name: "Zeynep Arslan", role: "Komi", initials: "ZA", state: "cikis", clockIn: null, hoursToday: 0, salesToday: 0, rating: 4.4 },
-  { id: "u7", name: "Burak Öz", role: "Mutfak", initials: "BÖ", state: "vardiyada", clockIn: "08:30", hoursToday: 8, salesToday: 0, rating: 4.5 },
-  { id: "u8", name: "Deniz Yıldız", role: "Garson", initials: "DY", state: "cikis", clockIn: null, hoursToday: 0, salesToday: 0, rating: 4.3 },
+  { id: "u1", name: "Ahmet Yılmaz", role: "Garson", initials: "AY", state: "vardiyada", clockIn: "10:00", hoursToday: 6.5, salesToday: 8420, rating: 4.8, level: "personel", access: ["masalar", "garson", "siramatik"] },
+  { id: "u2", name: "Selin Kaya", role: "Garson", initials: "SK", state: "vardiyada", clockIn: "10:00", hoursToday: 6.5, salesToday: 9650, rating: 4.9, level: "personel", access: ["masalar", "garson", "siramatik"] },
+  { id: "u3", name: "Murat Demir", role: "Garson", initials: "MD", state: "molada", clockIn: "11:00", hoursToday: 5.5, salesToday: 6230, rating: 4.6, level: "personel", access: ["masalar", "garson"] },
+  { id: "u4", name: "Elif Şahin", role: "Kasiyer / Yönetici", initials: "EŞ", state: "vardiyada", clockIn: "09:00", hoursToday: 7.5, salesToday: 0, rating: 4.7, level: "yonetici", access: ALL_MODULES },
+  { id: "u5", name: "Can Aydın", role: "İşletme Müdürü", initials: "CA", state: "vardiyada", clockIn: "08:30", hoursToday: 8, salesToday: 0, rating: 4.9, level: "admin", access: ALL_MODULES },
+  { id: "u6", name: "Zeynep Arslan", role: "Sıramatik Personeli", initials: "ZA", state: "vardiyada", clockIn: "09:30", hoursToday: 5, salesToday: 0, rating: 4.4, level: "personel", access: ["siramatik"] },
+  { id: "u7", name: "Burak Öz", role: "Mutfak", initials: "BÖ", state: "vardiyada", clockIn: "08:30", hoursToday: 8, salesToday: 0, rating: 4.5, level: "personel", access: ["mutfak", "siramatik"] },
+  { id: "u8", name: "Deniz Yıldız", role: "Garson", initials: "DY", state: "cikis", clockIn: null, hoursToday: 0, salesToday: 0, rating: 4.3, level: "personel", access: ["masalar", "garson"] },
 ];
+
+/** Kullanıcının erişebildiği modüller. */
+export const userModules = (s: Staff): ModuleId[] =>
+  LEVELS[s.level].scoped ? s.access : ALL_MODULES;
+
+/** Kullanıcı düzenleme yapabilir mi? (yönetici salt-okunur) */
+export const userCanEdit = (s: Staff): boolean => LEVELS[s.level].canEdit;
 
 export const SHIFT: Record<ShiftState, { label: string; dot: string; chip: string }> = {
   vardiyada: { label: "Vardiyada", dot: "#10b981", chip: "bg-emerald-100 text-emerald-700" },

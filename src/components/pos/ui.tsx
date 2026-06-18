@@ -2,7 +2,9 @@
 
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import type { LucideProps } from "lucide-react";
+import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePerms } from "./perms";
 
 type Icon = ComponentType<LucideProps>;
 
@@ -183,16 +185,20 @@ export function PrimaryButton({
   disabled?: boolean;
   className?: string;
 }) {
+  // Yönetici (salt-okunur) için tüm birincil aksiyonlar kilitlenir.
+  const { canEdit } = usePerms();
+  const locked = !canEdit;
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || locked}
+      title={locked ? "Yönetici yetkisinde düzenleme kapalıdır" : undefined}
       className={cn(
         "inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none",
         className,
       )}
     >
-      {IconCmp && <IconCmp className="h-4 w-4" strokeWidth={2.4} />}
+      {locked ? <Lock className="h-4 w-4" strokeWidth={2.4} /> : IconCmp && <IconCmp className="h-4 w-4" strokeWidth={2.4} />}
       {children}
     </button>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ComponentType } from "react";
 import type { LucideProps } from "lucide-react";
 import {
@@ -14,24 +15,16 @@ import {
   UtensilsCrossed,
   ChevronsUpDown,
   HelpCircle,
-  MoreVertical,
   ConciergeBell,
   TicketCheck,
+  Check,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
+import { LEVELS, SHIFT, type ModuleId, type Staff } from "@/lib/pos-modules";
 
-export type View =
-  | "masalar"
-  | "garson"
-  | "mutfak"
-  | "siramatik"
-  | "menu"
-  | "stok"
-  | "personel"
-  | "rapor"
-  | "subeler"
-  | "ayarlar";
+export type View = ModuleId;
 
 type Icon = ComponentType<LucideProps>;
 
@@ -64,10 +57,21 @@ const GROUPS: {
 export function Sidebar({
   view,
   setView,
+  user,
+  users,
+  onSwitchUser,
+  allowed,
 }: {
   view: View;
   setView: (v: View) => void;
+  user: Staff;
+  users: Staff[];
+  onSwitchUser: (id: string) => void;
+  allowed: ModuleId[];
 }) {
+  const [switcher, setSwitcher] = useState(false);
+  const lvl = LEVELS[user.level];
+
   return (
     <aside className="flex w-[256px] shrink-0 flex-col border-r border-line bg-panel">
       {/* Marka */}
@@ -97,73 +101,127 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* Navigasyon */}
+      {/* Navigasyon — kullanıcı yetkisine göre filtreli */}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
-        {GROUPS.map((g) => (
-          <div key={g.label} className="mb-3">
-            <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold tracking-wide text-ink3 uppercase">
-              {g.label}
-            </div>
-            <div className="flex flex-col gap-1">
-              {g.items.map((it) => {
-                const on = view === it.id;
-                const Ic = it.ic;
-                return (
-                  <button
-                    key={it.id}
-                    onClick={() => setView(it.id)}
-                    className={cn(
-                      "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
-                      on
-                        ? "bg-brand text-white shadow-sm shadow-brand/30"
-                        : "text-ink2 hover:bg-surface2 hover:text-ink",
-                    )}
-                  >
-                    <Ic
+        {GROUPS.map((g) => {
+          const items = g.items.filter((it) => allowed.includes(it.id));
+          if (items.length === 0) return null;
+          return (
+            <div key={g.label} className="mb-3">
+              <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold tracking-wide text-ink3 uppercase">
+                {g.label}
+              </div>
+              <div className="flex flex-col gap-1">
+                {items.map((it) => {
+                  const on = view === it.id;
+                  const Ic = it.ic;
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => setView(it.id)}
                       className={cn(
-                        "h-[18px] w-[18px] shrink-0 transition",
-                        on ? "text-white" : "text-ink3 group-hover:text-ink2",
+                        "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                        on
+                          ? "bg-brand text-white shadow-sm shadow-brand/30"
+                          : "text-ink2 hover:bg-surface2 hover:text-ink",
                       )}
-                      strokeWidth={2.2}
-                    />
-                    <span className="flex-1 text-left">{it.label}</span>
-                    {it.badge && (
-                      <span
+                    >
+                      <Ic
                         className={cn(
-                          "grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold",
-                          on ? "bg-white/25 text-white" : "bg-brand-soft text-brand",
+                          "h-[18px] w-[18px] shrink-0 transition",
+                          on ? "text-white" : "text-ink3 group-hover:text-ink2",
                         )}
-                      >
-                        {it.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                        strokeWidth={2.2}
+                      />
+                      <span className="flex-1 text-left">{it.label}</span>
+                      {it.badge && (
+                        <span
+                          className={cn(
+                            "grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold",
+                            on ? "bg-white/25 text-white" : "bg-brand-soft text-brand",
+                          )}
+                        >
+                          {it.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
-        {/* Yardım */}
         <button className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-ink2 transition hover:bg-surface2 hover:text-ink">
           <HelpCircle className="h-[18px] w-[18px] text-ink3 group-hover:text-ink2" strokeWidth={2.2} />
           Yardım & Destek
         </button>
       </nav>
 
-      {/* Kullanıcı */}
-      <div className="border-t border-line px-3 py-3">
-        <div className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-surface2">
+      {/* Kullanıcı + değiştirici (demo) */}
+      <div className="relative border-t border-line px-3 py-3">
+        {switcher && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setSwitcher(false)} />
+            <div className="absolute bottom-[68px] left-3 right-3 z-20 overflow-hidden rounded-2xl border border-line bg-white shadow-xl">
+              <div className="border-b border-line px-3 py-2 text-[10px] font-bold tracking-wide text-ink3 uppercase">
+                Kullanıcı değiştir (demo)
+              </div>
+              <div className="max-h-72 overflow-y-auto p-1.5">
+                {users.map((u) => {
+                  const ul = LEVELS[u.level];
+                  const sel = u.id === user.id;
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        onSwitchUser(u.id);
+                        setSwitcher(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition",
+                        sel ? "bg-brand-soft" : "hover:bg-surface2",
+                      )}
+                    >
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-orange-400 to-brand text-[11px] font-bold text-white">
+                        {u.initials}
+                      </div>
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <div className="truncate text-[13px] font-bold text-ink">{u.name}</div>
+                        <div className="truncate text-[11px] text-ink3">{u.role}</div>
+                      </div>
+                      <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold", ul.chip)}>
+                        {ul.label}
+                      </span>
+                      {sel && <Check className="h-4 w-4 shrink-0 text-brand" strokeWidth={2.6} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        <button
+          onClick={() => setSwitcher((s) => !s)}
+          className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-surface2"
+        >
           <div className="relative grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-orange-400 to-brand text-xs font-bold text-white">
-            AY
-            <span className="absolute -right-0 -bottom-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+            {user.initials}
+            <span
+              className="absolute -right-0 -bottom-0 h-2.5 w-2.5 rounded-full border-2 border-white"
+              style={{ background: SHIFT[user.state].dot }}
+            />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-sm font-bold text-ink">Ahmet Yılmaz</div>
-            <div className="truncate text-[11px] text-ink3">Yönetici</div>
+            <div className="truncate text-sm font-bold text-ink">{user.name}</div>
+            <div className="flex items-center gap-1 text-[11px] text-ink3">
+              <ShieldCheck className="h-3 w-3 shrink-0 text-ink3" strokeWidth={2.2} />
+              <span className="truncate">{lvl.label}</span>
+            </div>
           </div>
-          <MoreVertical className="h-4 w-4 shrink-0 text-ink3" strokeWidth={2} />
-        </div>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 text-ink3" strokeWidth={2} />
+        </button>
       </div>
     </aside>
   );

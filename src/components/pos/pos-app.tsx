@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { seedTables, type Table } from "@/lib/pos-data";
+import {
+  STAFF,
+  userModules,
+  userCanEdit,
+  type Staff,
+  type ModuleId,
+} from "@/lib/pos-modules";
 import { Sidebar, type View } from "./sidebar";
+import { PermsProvider, ReadOnlyBanner } from "./perms";
 import { Masalar } from "./masalar";
 import { Adisyon } from "./adisyon";
 import { Garson } from "./garson";
@@ -25,10 +33,26 @@ export function PosApp() {
   // SSR-güvenli dakika saati: sunucuda 0, mount sonrası ilerler.
   const [clockMin, setClockMin] = useState(0);
 
+  // Personel & aktif kullanıcı (yetkilendirme)
+  const [staff, setStaff] = useState<Staff[]>(STAFF);
+  const [currentUserId, setCurrentUserId] = useState("u5"); // Can Aydın · Admin
+  const currentUser = staff.find((s) => s.id === currentUserId) ?? staff[0];
+  const modules = userModules(currentUser);
+  const canEdit = userCanEdit(currentUser);
+
   useEffect(() => {
     const i = setInterval(() => setClockMin((c) => c + 0.5), 30000);
     return () => clearInterval(i);
   }, []);
+
+  // Kullanıcı değişince, erişimi olmayan bir modüldeyse ilk izinli modüle düş.
+  useEffect(() => {
+    if (!modules.includes(view as ModuleId)) {
+      setView(modules[0] as View);
+      setOpenNo(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]);
 
   const updateTable = (no: string, fn: (t: Table) => Table) =>
     setTables((ts) => ts.map((t) => (t.no === no ? fn({ ...t }) : t)));
@@ -85,41 +109,57 @@ export function PosApp() {
   if (!authed) return <Login onLogin={() => setAuthed(true)} />;
 
   return (
-    <div className="pos-canvas flex h-screen w-screen overflow-hidden font-sans text-ink">
-      <Sidebar view={view} setView={goView} />
-      <main className="flex min-w-0 flex-1 flex-col">
-        {inAdisyon && openTableObj && (
-          <Adisyon
-            t={openTableObj}
-            onBack={() => setOpenNo(null)}
-            addItem={addItem}
-            decItem={decItem}
-            askBill={askBill}
-            payTable={payTable}
-            clockMin={clockMin}
-          />
-        )}
-        {!inAdisyon && view === "masalar" && (
-          <Masalar
-            tables={tables}
-            activeHall={activeHall}
-            setActiveHall={setActiveHall}
-            onOpen={setOpenNo}
-            clockMin={clockMin}
-          />
-        )}
-        {!inAdisyon && view === "garson" && (
-          <Garson tables={tables} onOpen={setOpenNo} clockMin={clockMin} />
-        )}
-        {view === "mutfak" && <Mutfak tables={tables} clockMin={clockMin} />}
-        {view === "siramatik" && <Siramatik />}
-        {view === "menu" && <Menu />}
-        {view === "stok" && <Stok />}
-        {view === "personel" && <Personel />}
-        {view === "rapor" && <Rapor tables={tables} />}
-        {view === "subeler" && <Subeler />}
-        {view === "ayarlar" && <Ayarlar />}
-      </main>
-    </div>
+    <PermsProvider canEdit={canEdit}>
+      <div className="pos-canvas flex h-screen w-screen overflow-hidden font-sans text-ink">
+        <Sidebar
+          view={view}
+          setView={goView}
+          user={currentUser}
+          users={staff}
+          onSwitchUser={setCurrentUserId}
+          allowed={modules}
+        />
+        <main className="flex min-w-0 flex-1 flex-col">
+          {!canEdit && <ReadOnlyBanner />}
+          {inAdisyon && openTableObj && (
+            <Adisyon
+              t={openTableObj}
+              onBack={() => setOpenNo(null)}
+              addItem={addItem}
+              decItem={decItem}
+              askBill={askBill}
+              payTable={payTable}
+              clockMin={clockMin}
+            />
+          )}
+          {!inAdisyon && view === "masalar" && (
+            <Masalar
+              tables={tables}
+              activeHall={activeHall}
+              setActiveHall={setActiveHall}
+              onOpen={setOpenNo}
+              clockMin={clockMin}
+            />
+          )}
+          {!inAdisyon && view === "garson" && (
+            <Garson tables={tables} onOpen={setOpenNo} clockMin={clockMin} />
+          )}
+          {view === "mutfak" && <Mutfak tables={tables} clockMin={clockMin} />}
+          {view === "siramatik" && <Siramatik />}
+          {view === "menu" && <Menu />}
+          {view === "stok" && <Stok />}
+          {view === "personel" && (
+            <Personel
+              staff={staff}
+              setStaff={setStaff}
+              canManage={currentUser.level === "admin"}
+            />
+          )}
+          {view === "rapor" && <Rapor tables={tables} />}
+          {view === "subeler" && <Subeler />}
+          {view === "ayarlar" && <Ayarlar />}
+        </main>
+      </div>
+    </PermsProvider>
   );
 }

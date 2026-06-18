@@ -30,6 +30,7 @@ import {
 import { Food } from "./food";
 import { catIcon } from "./glyphs";
 import { Row } from "./ui";
+import { usePerms } from "./perms";
 
 export function Adisyon({
   t,
@@ -48,6 +49,7 @@ export function Adisyon({
   payTable: (no: string) => void;
   clockMin: number;
 }) {
+  const { canEdit } = usePerms();
   const [cat, setCat] = useState(CATS[0].id);
   const [q, setQ] = useState("");
   const list = PRODUCTS.filter((p) =>
@@ -135,7 +137,8 @@ export function Adisyon({
               <button
                 key={p.id}
                 onClick={() => addItem(t.no, p.id)}
-                className="group pos-card lift overflow-hidden text-left"
+                disabled={!canEdit}
+                className="group pos-card lift overflow-hidden text-left disabled:pointer-events-none disabled:opacity-60"
               >
                 <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-24 w-full" />
                 <div className="px-3 py-2.5">
@@ -212,14 +215,16 @@ export function Adisyon({
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => decItem(t.no, it.pid)}
-                      className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-rose-50 hover:text-rose-600"
+                      disabled={!canEdit}
+                      className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
                     >
                       <Minus className="h-3.5 w-3.5" strokeWidth={2.6} />
                     </button>
                     <span className="tnum w-5 text-center font-bold text-ink">{it.qty}</span>
                     <button
                       onClick={() => addItem(t.no, it.pid)}
-                      className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-emerald-50 hover:text-emerald-600"
+                      disabled={!canEdit}
+                      className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40"
                     >
                       <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
                     </button>
@@ -247,7 +252,7 @@ export function Adisyon({
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               onClick={() => askBill(t.no)}
-              disabled={!t.items.length}
+              disabled={!t.items.length || !canEdit}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-line py-3 text-sm font-bold text-ink2 transition hover:bg-surface2 disabled:opacity-40"
             >
               <Receipt className="h-4 w-4" strokeWidth={2.2} />
@@ -255,7 +260,7 @@ export function Adisyon({
             </button>
             <button
               onClick={() => payTable(t.no)}
-              disabled={!t.items.length}
+              disabled={!t.items.length || !canEdit}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-3 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:opacity-40 disabled:shadow-none"
             >
               <CreditCard className="h-4 w-4" strokeWidth={2.2} />

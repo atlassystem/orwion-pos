@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { COMING_MODULES } from "@/lib/pos-modules";
 import { Card, TopBar } from "./ui";
+import { usePerms } from "./perms";
 
 const MOD_ICON: Record<string, ComponentType<LucideProps>> = {
   loyalty: Gift,
@@ -101,6 +102,7 @@ function ToggleRow({
   ic: ComponentType<LucideProps>;
   on: boolean;
 }) {
+  const { canEdit } = usePerms();
   const [v, setV] = useState(on);
   return (
     <div className="flex items-center gap-4 px-5 py-3.5">
@@ -113,8 +115,9 @@ function ToggleRow({
       </div>
       <button
         onClick={() => setV(!v)}
+        disabled={!canEdit}
         className={cn(
-          "relative h-6 w-11 shrink-0 rounded-full transition",
+          "relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50",
           v ? "bg-brand" : "bg-line2",
         )}
       >

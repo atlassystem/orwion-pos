@@ -25,6 +25,7 @@ import {
   type SnackState,
 } from "@/lib/pos-modules";
 import { Tab, TopBar } from "./ui";
+import { usePerms } from "./perms";
 
 interface Line {
   id: string;
@@ -123,6 +124,7 @@ export function Siramatik() {
    Kiosk — sipariş girişi (ödeme yok), sıra no + fiş önizleme
    ============================================================ */
 function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number }) {
+  const { canEdit } = usePerms();
   const [filter, setFilter] = useState<"hepsi" | Station>("hepsi");
   const [cart, setCart] = useState<Line[]>([]);
   const [room, setRoom] = useState("");
@@ -260,7 +262,7 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
         <div className="border-t border-line px-5 py-4">
           <button
             onClick={submit}
-            disabled={!cart.length}
+            disabled={!cart.length || !canEdit}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:opacity-40 disabled:shadow-none"
           >
             <Printer className="h-4 w-4" strokeWidth={2.3} />
@@ -342,6 +344,7 @@ function StationLines({ title, lines }: { title: string; lines: Line[] }) {
    Hazırlık Kuyruğu — fişler mutfak/bar ayrımıyla, "Hazır" işaretle
    ============================================================ */
 function Kuyruk({ active, onReady }: { active: Ticket[]; onReady: (no: number) => void }) {
+  const { canEdit } = usePerms();
   return (
     <div className="scroll-light grid grid-cols-1 content-start gap-4 overflow-y-auto px-7 pb-7 md:grid-cols-2 xl:grid-cols-3">
       {active.map((t) => {
@@ -363,7 +366,8 @@ function Kuyruk({ active, onReady }: { active: Ticket[]; onReady: (no: number) =
               </div>
               <button
                 onClick={() => onReady(t.no)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-3.5 py-2.5 text-xs font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2"
+                disabled={!canEdit}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-3.5 py-2.5 text-xs font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:opacity-40 disabled:shadow-none"
               >
                 <Check className="h-4 w-4" strokeWidth={2.6} />
                 Hazır
@@ -424,6 +428,7 @@ function Ekran({
   active: Ticket[];
   onDeliver: (no: number) => void;
 }) {
+  const { canEdit } = usePerms();
   return (
     <div className="min-h-0 flex-1 px-7 pb-7">
       <div className="flex h-full flex-col overflow-hidden rounded-[1.25rem] bg-ink text-white shadow-xl">
@@ -455,7 +460,8 @@ function Ekran({
                 <button
                   key={t.no}
                   onClick={() => onDeliver(t.no)}
-                  className="pop group rounded-3xl border-2 border-emerald-400/40 bg-emerald-400/10 p-5 text-center transition hover:bg-emerald-400/20"
+                  disabled={!canEdit}
+                  className="pop group rounded-3xl border-2 border-emerald-400/40 bg-emerald-400/10 p-5 text-center transition hover:bg-emerald-400/20 disabled:cursor-default"
                 >
                   <div className="font-display text-6xl font-extrabold tnum leading-none text-emerald-300 blink">
                     {t.no}
