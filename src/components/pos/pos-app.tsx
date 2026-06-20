@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { seedTables, type Table } from "@/lib/pos-data";
 import {
   STAFF,
@@ -14,6 +14,14 @@ import {
   type RecipeLine,
   type ModuleId,
 } from "@/lib/pos-modules";
+import {
+  fetchBootstrap,
+  saveTable,
+  payTableApi,
+  saveRecipes,
+  saveStaff,
+  saveStockQty,
+} from "@/lib/pos-api";
 import { Sidebar, type View } from "./sidebar";
 import { PermsProvider, ReadOnlyBanner } from "./perms";
 import { Masalar } from "./masalar";
@@ -40,14 +48,32 @@ export function PosApp() {
 
   // Stok & reçeteler (ödeme alınınca reçeteye göre stok düşer)
   const [stock, setStock] = useState<StockItem[]>(STOCK);
-  const [recipes, setRecipes] = useState<Record<string, RecipeLine[]>>(RECIPES);
+  const [recipes, setRecipesState] = useState<Record<string, RecipeLine[]>>(RECIPES);
 
   // Personel & aktif kullanıcı (yetkilendirme)
-  const [staff, setStaff] = useState<Staff[]>(STAFF);
+  const [staff, setStaffState] = useState<Staff[]>(STAFF);
   const [currentUserId, setCurrentUserId] = useState("u5"); // Can Aydın · Admin
   const currentUser = staff.find((s) => s.id === currentUserId) ?? staff[0];
   const modules = userModules(currentUser);
   const canEdit = userCanEdit(currentUser);
+
+  // Mount'ta kalıcı veriyi DB'den çek (gerekirse seed eder). Hata olursa
+  // demo veriyle çalışmaya devam eder (uygulama çökmez).
+  useEffect(() => {
+    let alive = true;
+    fetchBootstrap()
+      .then((d) => {
+        if (!alive) return;
+        if (d.tables?.length) setTables(d.tables);
+        if (d.stock?.length) setStock(d.stock);
+        if (d.recipes) setRecipesState(d.recipes);
+        if (d.staff?.length) setStaffState(d.staff);
+      })
+      .catch((e) => console.warn("[pos] bootstrap başarısız, demo veriyle devam:", e));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     const i = setInterval(() => setClockMin((c) => c + 0.5), 30000);
@@ -63,8 +89,39 @@ export function PosApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
 
-  const updateTable = (no: string, fn: (t: Table) => Table) =>
-    setTables((ts) => ts.map((t) => (t.no === no ? fn({ ...t }) : t)));
+  // Çocuk bileşenler bu setter'larla yazar; her değişiklik DB'ye kalıcı yazılır.
+  const setRecipes: Dispatch<SetStateAction<Record<string, RecipeLine[]>>> = (action) =>
+    setRecipesState((prev) => {
+      const next =
+        typeof action === "function"
+          ? (action as (p: Record<string, RecipeLine[]>) => Record<string, RecipeLine[]>)(prev)
+          : action;
+      void saveRecipes(next);
+      return next;
+    });
+
+  const setStaff: Dispatch<SetStateAction<Staff[]>> = (action) =>
+    setStaffState((prev) => {
+      const next =
+        typeof action === "function" ? (action as (p: Staff[]) => Staff[])(prev) : action;
+      void saveStaff(next);
+      return next;
+    });
+
+  // Stok girişi: yeni mutlak miktarı yaz + kalıcı kaydet.
+  const stockIn = (id: string, qty: number) => {
+    setStock((s) => s.map((x) => (x.id === id ? { ...x, qty } : x)));
+    void saveStockQty(id, qty);
+  };
+
+  // Masayı güncelle + kalıcı kaydet (yeni durumu sunucuya yaz).
+  const updateTable = (no: string, fn: (t: Table) => Table) => {
+    const cur = tables.find((t) => t.no === no);
+    if (!cur) return;
+    const updated = fn({ ...cur, items: cur.items.map((i) => ({ ...i })) });
+    setTables((ts) => ts.map((t) => (t.no === no ? updated : t)));
+    void saveTable(updated);
+  };
 
   const addItem = (no: string, pid: string) =>
     updateTable(no, (t) => {
@@ -95,20 +152,23 @@ export function PosApp() {
       return t;
     });
 
-  const payTable = (no: string) => {
-    // Ödeme alınınca: adisyondaki ürünleri reçeteye göre stoktan düş.
+  const payTable = async (no: string) => {
+    // Optimistik: yerelde stok düş + masayı sıfırla (anında geri bildirim).
     const paid = tables.find((t) => t.no === no);
     if (paid && paid.items.length) {
       setStock((s) => consumeStock(s, paid.items, recipes));
     }
-    updateTable(no, (t) => {
-      t.status = "bos";
-      t.items = [];
-      t.startedAt = null;
-      t.waiter = null;
-      return t;
-    });
+    setTables((ts) =>
+      ts.map((t) =>
+        t.no === no
+          ? { ...t, status: "bos", items: [], startedAt: null, waiter: null }
+          : t,
+      ),
+    );
     setOpenNo(null);
+    // Kalıcı: sunucuda order+payment kaydı + stok düşümü. Sunucu otoritatif.
+    const { stock: freshStock } = await payTableApi(no);
+    if (freshStock) setStock(freshStock);
   };
 
   const goView = (v: View) => {
@@ -166,6 +226,7 @@ export function PosApp() {
               stock={stock}
               recipes={recipes}
               setRecipes={setRecipes}
+              onStockIn={stockIn}
             />
           )}
           {view === "personel" && (

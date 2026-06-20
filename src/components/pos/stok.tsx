@@ -38,12 +38,16 @@ export function Stok({
   stock,
   recipes,
   setRecipes,
+  onStockIn,
 }: {
   stock: StockItem[];
   recipes: Record<string, RecipeLine[]>;
   setRecipes: Dispatch<SetStateAction<Record<string, RecipeLine[]>>>;
+  onStockIn: (id: string, qty: number) => void;
 }) {
+  const { canEdit } = usePerms();
   const [tab, setTab] = useState<"envanter" | "recete">("envanter");
+  const [stockInOpen, setStockInOpen] = useState(false);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -53,10 +57,26 @@ export function Stok({
         sub={stock.length + " kalem · " + Object.keys(recipes).length + " reçete"}
         right={
           tab === "envanter" ? (
-            <PrimaryButton icon={Plus}>Stok Girişi</PrimaryButton>
+            <PrimaryButton
+              icon={Plus}
+              onClick={() => canEdit && setStockInOpen(true)}
+            >
+              Stok Girişi
+            </PrimaryButton>
           ) : undefined
         }
       />
+
+      {stockInOpen && (
+        <StockInModal
+          stock={stock}
+          onClose={() => setStockInOpen(false)}
+          onSave={(id, qty) => {
+            onStockIn(id, qty);
+            setStockInOpen(false);
+          }}
+        />
+      )}
 
       <div className="mb-4 flex items-center gap-2 px-7">
         <Tab on={tab === "envanter"} onClick={() => setTab("envanter")}>
@@ -503,6 +523,100 @@ function Summary({ label, value, tone }: { label: string; value: string; tone?: 
       <div className="text-[10px] font-bold tracking-wide text-ink3 uppercase">{label}</div>
       <div className={cn("font-display tnum text-base font-extrabold", tone ?? "text-ink")}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Stok Girişi — bir kaleme miktar ekle (mal kabul). Kalıcı yazılır.
+   ============================================================ */
+function StockInModal({
+  stock,
+  onClose,
+  onSave,
+}: {
+  stock: StockItem[];
+  onClose: () => void;
+  onSave: (id: string, newQty: number) => void;
+}) {
+  const [id, setId] = useState(stock[0]?.id ?? "");
+  const [add, setAdd] = useState(1);
+  const item = stock.find((s) => s.id === id);
+  const newQty = item ? Math.round((item.qty + (add || 0)) * 1000) / 1000 : 0;
+  const valid = !!item && add > 0;
+
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm">
+      <div className="pop flex w-full max-w-md flex-col overflow-hidden rounded-[1.25rem] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h3 className="flex items-center gap-2 font-display text-lg font-extrabold text-ink">
+            <PackageCheck className="h-5 w-5 text-brand" strokeWidth={2.2} />
+            Stok Girişi
+          </h3>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg text-ink3 transition hover:bg-surface2 hover:text-ink"
+          >
+            <X className="h-4.5 w-4.5" strokeWidth={2.2} />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Stok Kalemi</span>
+            <select
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
+            >
+              {stock.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — {s.qty} {s.unit}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] font-semibold text-ink2">
+              Eklenecek Miktar {item ? "(" + item.unit + ")" : ""}
+            </span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={add}
+              onChange={(e) => setAdd(parseFloat(e.target.value) || 0)}
+              className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3.5 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
+            />
+          </label>
+
+          {item && (
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface2 p-3 text-center">
+              <Summary label="Mevcut" value={item.qty + " " + item.unit} />
+              <Summary label="Giriş" value={"+" + (add || 0)} tone="text-emerald-600" />
+              <Summary label="Yeni" value={newQty + " " + item.unit} tone="text-brand" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-line2 bg-white px-4 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
+          >
+            Vazgeç
+          </button>
+          <button
+            onClick={() => valid && onSave(id, newQty)}
+            disabled={!valid}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Check className="h-4 w-4" strokeWidth={2.6} />
+            Girişi Kaydet
+          </button>
+        </div>
       </div>
     </div>
   );
