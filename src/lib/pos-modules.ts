@@ -140,7 +140,7 @@ export type ModuleId =
 
 export const MODULES: { id: ModuleId; label: string }[] = [
   { id: "masalar", label: "Masa Planı" },
-  { id: "garson", label: "Garson Terminali" },
+  { id: "garson", label: "Garson" },
   { id: "mutfak", label: "Mutfak (KDS)" },
   { id: "siramatik", label: "Sıramatik" },
   { id: "menu", label: "Menü Yönetimi" },

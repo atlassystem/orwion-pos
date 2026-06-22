@@ -33,21 +33,21 @@ const GROUPS: {
   items: { id: View; label: string; ic: Icon; badge?: string }[];
 }[] = [
   {
-    label: "Menü",
+    label: "Operasyon",
     items: [
+      { id: "menu", label: "Menü", ic: BookOpen },
       { id: "masalar", label: "Masa Planı", ic: LayoutGrid },
-      { id: "garson", label: "Garson Terminali", ic: ConciergeBell },
-      { id: "mutfak", label: "Mutfak (KDS)", ic: ChefHat },
+      { id: "garson", label: "Garson", ic: ConciergeBell },
       { id: "siramatik", label: "Sıramatik", ic: TicketCheck },
-      { id: "menu", label: "Menü Yönetimi", ic: BookOpen },
-      { id: "stok", label: "Stok & Envanter", ic: Boxes, badge: "3" },
-      { id: "personel", label: "Personel", ic: Users },
+      { id: "mutfak", label: "Mutfak (KDS)", ic: ChefHat },
       { id: "rapor", label: "Raporlar", ic: BarChart3 },
     ],
   },
   {
-    label: "Diğer",
+    label: "Yönetim",
     items: [
+      { id: "stok", label: "Stok & Envanter", ic: Boxes, badge: "3" },
+      { id: "personel", label: "Personel", ic: Users },
       { id: "subeler", label: "Şubeler", ic: Building2 },
       { id: "ayarlar", label: "Ayarlar", ic: Settings },
     ],
