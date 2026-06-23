@@ -335,7 +335,14 @@ export function PosApp() {
               canManage={currentUser.level === "admin"}
             />
           )}
-          {view === "rapor" && <Rapor tables={tables} />}
+          {view === "rapor" && (
+            <Rapor
+              branchId={activeBranch}
+              branchName={
+                branches.find((b) => b.id === activeBranch)?.name ?? activeBranch
+              }
+            />
+          )}
           {view === "subeler" && <Subeler />}
           {view === "ayarlar" && <Ayarlar />}
         </main>

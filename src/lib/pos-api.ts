@@ -45,6 +45,33 @@ export async function fetchBootstrap(branch?: string): Promise<Bootstrap> {
   };
 }
 
+/* ---------- Raporlar ---------- */
+export interface ReportSummary {
+  revenue: number;
+  cost: number;
+  profit: number;
+  margin: number;
+  orderCount: number;
+}
+
+/** Bir şube + gün için gerçek satış özeti (order'lardan). */
+export async function fetchReportSummary(
+  date: string,
+  branch: string,
+): Promise<ReportSummary> {
+  const qs = `?date=${encodeURIComponent(date)}&branch=${encodeURIComponent(branch)}`;
+  const res = await fetch(`/api/report/summary${qs}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("report_failed");
+  const d = await res.json();
+  return {
+    revenue: d.revenue ?? 0,
+    cost: d.cost ?? 0,
+    profit: d.profit ?? 0,
+    margin: d.margin ?? 0,
+    orderCount: d.orderCount ?? 0,
+  };
+}
+
 /* ---------- Sedna maliyet kataloğu (reçete malzeme araması) ---------- */
 /** code/ad ile Sedna ürünü arar (reçete malzemesi seçimi için). */
 export async function searchSedna(q: string): Promise<SednaProduct[]> {

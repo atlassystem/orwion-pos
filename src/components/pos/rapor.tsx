@@ -1,154 +1,103 @@
 "use client";
 
-import { BarChart3, Wallet, Receipt, TrendingUp, CircleDollarSign, FileText } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
-  CATS,
-  TL,
-  orderTotal,
-  prodById,
-  type Table,
-} from "@/lib/pos-data";
-import { Food } from "./food";
-import { AreaChart, DonutChart } from "./charts";
-import { Card, GhostButton, PrimaryButton, Stat, TopBar } from "./ui";
+  BarChart3,
+  Wallet,
+  Receipt,
+  TrendingUp,
+  Coins,
+  Percent,
+  Store,
+  CalendarDays,
+} from "lucide-react";
+import { TL } from "@/lib/pos-data";
+import { fetchReportSummary, type ReportSummary } from "@/lib/pos-api";
+import { Stat, TopBar } from "./ui";
 
-const ODEME = [
-  { k: "Nakit", v: 9850, c: "#10b981" },
-  { k: "Kredi Kartı", v: 12600, c: "#f59e0b" },
-  { k: "Yemek Çeki", v: 2400, c: "#8b5cf6" },
-];
+/**
+ * Raporlar — Günlük Ciro / Maliyet / Kâr özeti (GERÇEK satışlardan).
+ * Kapsam: aktif şube (FAZ3) + seçili gün. Tüm rakamlar order'lardan gelir.
+ */
+export function Rapor({
+  branchId,
+  branchName,
+}: {
+  branchId: string;
+  branchName: string;
+}) {
+  const [date, setDate] = useState(""); // SSR-güvenli: ilk değer istemcide atanır
+  const [data, setData] = useState<ReportSummary | null>(null);
 
-const SAATLIK: [string, number][] = [
-  ["11", 1200], ["12", 3400], ["13", 5200], ["14", 3100],
-  ["15", 1600], ["16", 1400], ["17", 2200], ["18", 3900],
-  ["19", 6100], ["20", 7400], ["21", 5800], ["22", 3200],
-];
+  // Varsayılan gün = bugün (yerel). Yalnızca istemcide hesaplanır (hydration uyumu).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDate(new Date().toLocaleDateString("en-CA"));
+  }, []);
 
-const BASE_TOP: [string, number][] = [
-  ["i1", 38], ["z1", 31], ["c1", 29], ["i2", 24], ["t1", 22],
-];
+  // Gün veya şube değişince gerçek özeti çek.
+  useEffect(() => {
+    if (!date) return;
+    let alive = true;
+    fetchReportSummary(date, branchId)
+      .then((d) => {
+        if (alive) setData(d);
+      })
+      .catch(() => {
+        if (alive) setData({ revenue: 0, cost: 0, profit: 0, margin: 0, orderCount: 0 });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [date, branchId]);
 
-export function Rapor({ tables }: { tables: Table[] }) {
-  const acik = tables.filter((t) => t.items.length);
-  const acikCiro = acik.reduce((s, t) => s + orderTotal(t.items), 0);
-  const kapanmisCiro = 24850;
-  const ciro = kapanmisCiro + acikCiro;
-  const adisyon = 42;
-  const ortalama = ciro / adisyon;
-
-  const odToplam = ODEME.reduce((s, o) => s + o.v, 0);
-
-  const sayac: Record<string, number> = {};
-  tables.forEach((t) =>
-    t.items.forEach((it) => {
-      sayac[it.pid] = (sayac[it.pid] || 0) + it.qty;
-    }),
-  );
-  const top = BASE_TOP.map(([pid, n]) => ({
-    p: prodById[pid],
-    n: n + (sayac[pid] || 0),
-  })).sort((a, b) => b.n - a.n);
-  const maxTop = Math.max(...top.map((t) => t.n));
+  const d = data ?? { revenue: 0, cost: 0, profit: 0, margin: 0, orderCount: 0 };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TopBar
-        title="Gün Sonu — Z Raporu"
+        title="Raporlar — Günlük Özet"
         icon={BarChart3}
         right={
-          <>
-            <GhostButton icon={FileText}>PDF</GhostButton>
-            <PrimaryButton>Gün Sonu Al</PrimaryButton>
-          </>
+          <label className="flex items-center gap-2 rounded-xl border border-line2 bg-white px-3 py-2 text-sm font-bold text-ink2">
+            <CalendarDays className="h-4 w-4 text-ink3" strokeWidth={2.2} />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="bg-transparent text-sm font-bold text-ink outline-none"
+            />
+          </label>
         }
       />
 
       <div className="scroll-light space-y-4 overflow-y-auto px-7 pb-7">
-        <div className="grid grid-cols-4 gap-4">
-          <Stat icon={Wallet} label="Toplam Ciro" value={TL(ciro)} tone="orange" />
-          <Stat icon={Receipt} label="Adisyon Sayısı" value={adisyon + ""} tone="green" />
-          <Stat icon={TrendingUp} label="Ortalama Adisyon" value={TL(ortalama)} tone="sky" />
-          <Stat icon={CircleDollarSign} label="Açık Hesap" value={TL(acikCiro)} tone="violet" />
+        {/* Kapsam bilgisi */}
+        <div className="flex items-center gap-2 text-sm text-ink2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-[12px] font-bold text-brand">
+            <Store className="h-3.5 w-3.5" strokeWidth={2.4} />
+            {branchName}
+          </span>
+          <span className="text-ink3">·</span>
+          <span className="text-[13px] font-semibold text-ink2">
+            {date || "—"}
+          </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          <Card
-            title="Saatlik Ciro"
-            className="col-span-2"
-            right={
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                <TrendingUp className="h-3.5 w-3.5" strokeWidth={2.4} />
-                En yoğun 20:00
-              </span>
-            }
-          >
-            <AreaChart
-              data={SAATLIK.map(([h, v]) => ({ label: h, value: v }))}
-              height={200}
-              fmt={(n) => TL(n)}
-              peakLabel
-            />
-          </Card>
-
-          <Card title="Ödeme Dağılımı">
-            <div className="flex flex-col items-center">
-              <DonutChart
-                segments={ODEME.map((o) => ({ label: o.k, value: o.v, color: o.c }))}
-                centerBottom="Tahsilat"
-                centerTop={TL(odToplam)}
-              />
-              <div className="mt-5 w-full space-y-2.5">
-                {ODEME.map((o) => (
-                  <div key={o.k} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 font-semibold text-ink2">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: o.c }} />
-                      {o.k}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="tnum text-[11px] text-ink3">
-                        %{Math.round((o.v / odToplam) * 100)}
-                      </span>
-                      <span className="tnum font-bold text-ink">{TL(o.v)}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
+        {/* Özet kutuları — gerçek order'lardan */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <Stat icon={Wallet} label="Toplam Ciro" value={TL(d.revenue)} tone="orange" />
+          <Stat icon={Coins} label="Toplam Maliyet" value={TL(d.cost)} tone="rose" />
+          <Stat icon={TrendingUp} label="Kâr" value={TL(d.profit)} tone="green" />
+          <Stat icon={Percent} label="Kâr Marjı" value={"%" + d.margin} tone="sky" />
+          <Stat icon={Receipt} label="Adisyon Sayısı" value={d.orderCount + ""} tone="violet" />
         </div>
 
-        <Card title="En Çok Satan Ürünler">
-          <div className="space-y-3">
-            {top.map((t, i) => (
-              <div key={t.p.id} className="flex items-center gap-3">
-                <span className="font-display w-6 text-center text-lg font-extrabold text-ink3">
-                  {i + 1}
-                </span>
-                <Food
-                  img={t.p.img}
-                  emoji={t.p.emoji}
-                  grad={t.p.grad}
-                  className="h-10 w-10 shrink-0 rounded-lg"
-                />
-                <div className="w-44 shrink-0">
-                  <div className="text-sm leading-tight font-bold text-ink">{t.p.name}</div>
-                  <div className="text-[11px] text-ink3">
-                    {CATS.find((c) => c.id === t.p.cat)?.name}
-                  </div>
-                </div>
-                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface2">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-brand to-orange-400"
-                    style={{ width: (t.n / maxTop) * 100 + "%" }}
-                  />
-                </div>
-                <span className="tnum w-16 text-right text-sm font-bold text-ink">
-                  {t.n} adet
-                </span>
-              </div>
-            ))}
+        {data && d.orderCount === 0 && (
+          <div className="rounded-2xl border border-dashed border-line2 bg-surface2/40 py-10 text-center text-sm text-ink3">
+            Bu gün için {branchName} şubesinde kapanmış adisyon yok.
           </div>
-        </Card>
+        )}
       </div>
     </div>
   );
