@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   ClipboardList,
   Plus,
@@ -223,7 +223,6 @@ function ProductModal({
   const [img, setImg] = useState(product?.img ?? "");
   const [uploading, setUploading] = useState(false);
   const [imgErr, setImgErr] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const valid = name.trim().length > 0 && !!catId && price >= 0 && !uploading;
 
@@ -273,18 +272,13 @@ function ProductModal({
             <div className="min-w-0">
               <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Fotoğraf</span>
               <div className="flex items-center gap-2">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={onPickFile}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-line2 bg-white px-3 py-2 text-xs font-bold text-ink2 transition hover:bg-surface2 hover:text-ink disabled:opacity-50"
+                {/* <label> içindeki gizli input — tıklayınca dosya penceresi
+                    NATIVE açılır (programatik .click() yok; tüm tarayıcılarda çalışır). */}
+                <label
+                  className={cn(
+                    "inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-line2 bg-white px-3 py-2 text-xs font-bold text-ink2 transition hover:bg-surface2 hover:text-ink",
+                    uploading && "pointer-events-none opacity-50",
+                  )}
                 >
                   {uploading ? (
                     <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
@@ -292,7 +286,14 @@ function ProductModal({
                     <ImagePlus className="h-4 w-4" strokeWidth={2.2} />
                   )}
                   {uploading ? "Yükleniyor…" : img ? "Değiştir" : "Fotoğraf Seç"}
-                </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={onPickFile}
+                    disabled={uploading}
+                    className="sr-only"
+                  />
+                </label>
                 {img && !uploading && (
                   <button
                     type="button"
