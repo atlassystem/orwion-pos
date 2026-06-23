@@ -4,6 +4,7 @@
    Not: Görsel URL olarak saklanır → bootstrap/products şişmez. */
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { uploadsDir } from "@/lib/server/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: "too_large" }, { status: 413 });
     }
 
-    const dir = join(process.cwd(), "public", "uploads");
+    const dir = uploadsDir();
     await mkdir(dir, { recursive: true });
     const name =
       "u" +
