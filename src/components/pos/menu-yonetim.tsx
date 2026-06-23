@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ClipboardList,
   Plus,
@@ -11,9 +11,19 @@ import {
   Tags,
   Boxes,
   Soup,
+  ImagePlus,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TL, type Product, type Category, type Route } from "@/lib/pos-data";
+import {
+  TL,
+  DEFAULT_PRODUCT_EMOJI,
+  DEFAULT_PRODUCT_GRAD,
+  type Product,
+  type Category,
+  type Route,
+} from "@/lib/pos-data";
+import { uploadProductImage } from "@/lib/pos-api";
 import { Food } from "./food";
 import { catIcon } from "./glyphs";
 import { PrimaryButton, Stat, Tab, TopBar } from "./ui";
@@ -25,7 +35,39 @@ type Draft = {
   cat: string;
   price: number;
   route: Route;
+  img: string;
 };
+
+/** Görseli istemcide en fazla ~800px'e küçültüp JPEG dataURL döndürür. */
+async function resizeImage(file: File, maxPx = 800, quality = 0.82): Promise<string> {
+  const readDataUrl = (f: File) =>
+    new Promise<string>((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result as string);
+      fr.onerror = () => rej(new Error("read_failed"));
+      fr.readAsDataURL(f);
+    });
+  const src = await readDataUrl(file);
+  const img = await new Promise<HTMLImageElement>((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error("img_failed"));
+    im.src = src;
+  });
+  let { width, height } = img;
+  if (width > maxPx || height > maxPx) {
+    const s = Math.min(maxPx / width, maxPx / height);
+    width = Math.round(width * s);
+    height = Math.round(height * s);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return src;
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", quality);
+}
 
 export function MenuYonetim({
   products,
@@ -178,8 +220,30 @@ function ProductModal({
   const [catId, setCatId] = useState(product?.cat ?? cats[0]?.id ?? "");
   const [price, setPrice] = useState(product?.price ?? 0);
   const [route, setRoute] = useState<Route>(product?.route ?? "mutfak");
+  const [img, setImg] = useState(product?.img ?? "");
+  const [uploading, setUploading] = useState(false);
+  const [imgErr, setImgErr] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const valid = name.trim().length > 0 && !!catId && price >= 0;
+  const valid = name.trim().length > 0 && !!catId && price >= 0 && !uploading;
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // aynı dosya tekrar seçilebilsin
+    if (!file) return;
+    setImgErr("");
+    setUploading(true);
+    try {
+      const dataUrl = await resizeImage(file);
+      const url = await uploadProductImage(dataUrl);
+      if (url) setImg(url);
+      else setImgErr("Yükleme başarısız");
+    } catch {
+      setImgErr("Görsel okunamadı");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-30 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm">
@@ -198,6 +262,52 @@ function ProductModal({
         </div>
 
         <div className="space-y-4 px-6 py-5">
+          {/* Fotoğraf — seç + önizleme (foto yoksa emoji/gradyan) */}
+          <div className="flex items-center gap-3">
+            <Food
+              img={img}
+              emoji={product?.emoji ?? DEFAULT_PRODUCT_EMOJI}
+              grad={product?.grad ?? DEFAULT_PRODUCT_GRAD}
+              className="h-16 w-16 shrink-0 rounded-xl"
+            />
+            <div className="min-w-0">
+              <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Fotoğraf</span>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={onPickFile}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-line2 bg-white px-3 py-2 text-xs font-bold text-ink2 transition hover:bg-surface2 hover:text-ink disabled:opacity-50"
+                >
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
+                  ) : (
+                    <ImagePlus className="h-4 w-4" strokeWidth={2.2} />
+                  )}
+                  {uploading ? "Yükleniyor…" : img ? "Değiştir" : "Fotoğraf Seç"}
+                </button>
+                {img && !uploading && (
+                  <button
+                    type="button"
+                    onClick={() => setImg("")}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-line2 bg-white px-3 py-2 text-xs font-bold text-ink3 transition hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                    Kaldır
+                  </button>
+                )}
+              </div>
+              {imgErr && <span className="mt-1 block text-[11px] font-semibold text-rose-600">{imgErr}</span>}
+            </div>
+          </div>
+
           <label className="block">
             <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Ürün Adı</span>
             <input
@@ -259,7 +369,7 @@ function ProductModal({
           </button>
           <button
             onClick={() =>
-              valid && onSave({ name: name.trim(), cat: catId, price, route })
+              valid && onSave({ name: name.trim(), cat: catId, price, route, img })
             }
             disabled={!valid}
             className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:cursor-not-allowed disabled:opacity-40"

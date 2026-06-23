@@ -111,6 +111,14 @@ export async function deleteProduct(id: string): Promise<boolean> {
   return res.ok;
 }
 
+/** Ürün fotoğrafını (küçültülmüş dataURL) sunucuya yükler; kalıcı URL döner. */
+export async function uploadProductImage(dataUrl: string): Promise<string | null> {
+  const res = await fetch("/api/upload", json("POST", { dataUrl }));
+  if (!res.ok) return null;
+  const d = await res.json();
+  return d.url ?? null;
+}
+
 /** Bir masanın tüm durumunu kaydeder (ürün ekle/çıkar, hesap iste). branch_id
  *  masa nesnesinde taşınır; ayrıca güvence için query'ye de eklenir. */
 export async function saveTable(table: Table): Promise<void> {

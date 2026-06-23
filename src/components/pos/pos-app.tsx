@@ -152,7 +152,7 @@ export function PosApp() {
   // ---- Ürün CRUD (Menü Yönetimi). Her değişiklik DB'ye yazılır ve hem React
   // state'i hem modül dizileri güncellenir; böylece "Menü", adisyon ve reçeteler
   // anında yeni veriyle çalışır. ----
-  type ProductDraft = { name: string; cat: string; price: number; route: Product["route"] };
+  type ProductDraft = { name: string; cat: string; price: number; route: Product["route"]; img?: string };
 
   const addProduct = async (d: ProductDraft) => {
     const created = await createProduct(d);

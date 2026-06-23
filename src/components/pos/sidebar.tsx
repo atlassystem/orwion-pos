@@ -15,6 +15,7 @@ import {
   Settings,
   UtensilsCrossed,
   ChevronsUpDown,
+  ChevronDown,
   HelpCircle,
   ConciergeBell,
   TicketCheck,
@@ -38,31 +39,28 @@ export type View = ModuleId;
 
 type Icon = ComponentType<LucideProps>;
 
-const GROUPS: {
-  label: string;
-  items: { id: View; label: string; ic: Icon; badge?: string }[];
-}[] = [
-  {
-    label: "Operasyon",
-    items: [
-      { id: "menu", label: "Menü", ic: BookOpen },
-      { id: "masalar", label: "Masa Planı", ic: LayoutGrid },
-      { id: "garson", label: "Garson", ic: ConciergeBell },
-      { id: "siramatik", label: "Sıramatik", ic: TicketCheck },
-      { id: "mutfak", label: "Mutfak (KDS)", ic: ChefHat },
-      { id: "rapor", label: "Raporlar", ic: BarChart3 },
-    ],
-  },
-  {
-    label: "Yönetim",
-    items: [
-      { id: "menu_yonetim", label: "Menü Yönetimi", ic: ClipboardList },
-      { id: "stok", label: "Stok & Envanter", ic: Boxes, badge: "3" },
-      { id: "personel", label: "Personel", ic: Users },
-      { id: "subeler", label: "Şubeler", ic: Building2 },
-      { id: "ayarlar", label: "Ayarlar", ic: Settings },
-    ],
-  },
+type NavItem = { id: View; label: string; ic: Icon; badge?: string };
+
+/** Üst grup — düz operasyon sekmeleri. */
+const OPERATION: { label: string; items: NavItem[] } = {
+  label: "Operasyon",
+  items: [
+    { id: "menu", label: "Menü", ic: BookOpen },
+    { id: "masalar", label: "Masa Planı", ic: LayoutGrid },
+    { id: "garson", label: "Garson", ic: ConciergeBell },
+    { id: "siramatik", label: "Sıramatik", ic: TicketCheck },
+    { id: "mutfak", label: "Mutfak (KDS)", ic: ChefHat },
+    { id: "rapor", label: "Raporlar", ic: BarChart3 },
+  ],
+};
+
+/** Açılır "Ayarlar" başlığı altındaki alt-sekmeler. */
+const SETTINGS_ITEMS: NavItem[] = [
+  { id: "menu_yonetim", label: "Menü Yönetimi", ic: ClipboardList },
+  { id: "stok", label: "Stok & Envanter", ic: Boxes, badge: "3" },
+  { id: "personel", label: "Personel", ic: Users },
+  { id: "subeler", label: "Şubeler", ic: Building2 },
+  { id: "ayarlar", label: "Genel", ic: Settings },
 ];
 
 export function Sidebar({
@@ -91,6 +89,51 @@ export function Sidebar({
   const lvl = LEVELS[user.level];
   const activeBranch =
     branches.find((b) => b.id === activeBranchId) ?? branches[0];
+
+  // Ayarlar açılır başlığı: varsayılan kapalı; aktif sekme alt-sekmelerden
+  // biriyse açık dursun. (Kullanıcı manuel açabilir; aktif sekme zaten açar.)
+  const operationItems = OPERATION.items.filter((it) => allowed.includes(it.id));
+  const settingsItems = SETTINGS_ITEMS.filter((it) => allowed.includes(it.id));
+  const activeInSettings = settingsItems.some((it) => it.id === view);
+  const [settingsOpenUser, setSettingsOpenUser] = useState(false);
+  const settingsOpen = settingsOpenUser || activeInSettings;
+
+  const renderItem = (it: NavItem, indented: boolean) => {
+    const on = view === it.id;
+    const Ic = it.ic;
+    return (
+      <button
+        key={it.id}
+        onClick={() => setView(it.id)}
+        className={cn(
+          "group flex items-center gap-3 rounded-xl py-2.5 text-sm font-semibold transition",
+          indented ? "pl-4 pr-3" : "px-3",
+          on
+            ? "bg-brand text-white shadow-sm shadow-brand/30"
+            : "text-ink2 hover:bg-surface2 hover:text-ink",
+        )}
+      >
+        <Ic
+          className={cn(
+            "h-[18px] w-[18px] shrink-0 transition",
+            on ? "text-white" : "text-ink3 group-hover:text-ink2",
+          )}
+          strokeWidth={2.2}
+        />
+        <span className="flex-1 text-left">{it.label}</span>
+        {it.badge && (
+          <span
+            className={cn(
+              "grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold",
+              on ? "bg-white/25 text-white" : "bg-brand-soft text-brand",
+            )}
+          >
+            {it.badge}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <aside className="flex w-[256px] shrink-0 flex-col border-r border-line bg-panel">
@@ -164,54 +207,51 @@ export function Sidebar({
 
       {/* Navigasyon — kullanıcı yetkisine göre filtreli */}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
-        {GROUPS.map((g) => {
-          const items = g.items.filter((it) => allowed.includes(it.id));
-          if (items.length === 0) return null;
-          return (
-            <div key={g.label} className="mb-3">
-              <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold tracking-wide text-ink3 uppercase">
-                {g.label}
-              </div>
-              <div className="flex flex-col gap-1">
-                {items.map((it) => {
-                  const on = view === it.id;
-                  const Ic = it.ic;
-                  return (
-                    <button
-                      key={it.id}
-                      onClick={() => setView(it.id)}
-                      className={cn(
-                        "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
-                        on
-                          ? "bg-brand text-white shadow-sm shadow-brand/30"
-                          : "text-ink2 hover:bg-surface2 hover:text-ink",
-                      )}
-                    >
-                      <Ic
-                        className={cn(
-                          "h-[18px] w-[18px] shrink-0 transition",
-                          on ? "text-white" : "text-ink3 group-hover:text-ink2",
-                        )}
-                        strokeWidth={2.2}
-                      />
-                      <span className="flex-1 text-left">{it.label}</span>
-                      {it.badge && (
-                        <span
-                          className={cn(
-                            "grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold",
-                            on ? "bg-white/25 text-white" : "bg-brand-soft text-brand",
-                          )}
-                        >
-                          {it.badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+        {/* Operasyon — düz grup */}
+        {operationItems.length > 0 && (
+          <div className="mb-3">
+            <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold tracking-wide text-ink3 uppercase">
+              {OPERATION.label}
             </div>
-          );
-        })}
+            <div className="flex flex-col gap-1">
+              {operationItems.map((it) => renderItem(it, false))}
+            </div>
+          </div>
+        )}
+
+        {/* Ayarlar — açılır başlık */}
+        {settingsItems.length > 0 && (
+          <div className="mb-3">
+            <button
+              onClick={() => setSettingsOpenUser((s) => !s)}
+              aria-expanded={settingsOpen}
+              className={cn(
+                "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                activeInSettings && !settingsOpenUser
+                  ? "text-ink"
+                  : "text-ink2 hover:bg-surface2 hover:text-ink",
+              )}
+            >
+              <Settings
+                className="h-[18px] w-[18px] shrink-0 text-ink3 transition group-hover:text-ink2"
+                strokeWidth={2.2}
+              />
+              <span className="flex-1 text-left">Ayarlar</span>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 text-ink3 transition-transform",
+                  settingsOpen && "rotate-180",
+                )}
+                strokeWidth={2.4}
+              />
+            </button>
+            {settingsOpen && (
+              <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-line2 pl-1">
+                {settingsItems.map((it) => renderItem(it, true))}
+              </div>
+            )}
+          </div>
+        )}
 
         <button className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-ink2 transition hover:bg-surface2 hover:text-ink">
           <HelpCircle className="h-[18px] w-[18px] text-ink3 group-hover:text-ink2" strokeWidth={2.2} />
