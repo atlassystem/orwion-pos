@@ -57,7 +57,7 @@ export function Stok({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TopBar
-        title="Stok & Envanter"
+        title="Stok & Reçeteler"
         icon={Boxes}
         sub={stock.length + " kalem · " + Object.keys(recipes).length + " reçete"}
         right={

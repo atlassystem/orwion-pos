@@ -14,12 +14,26 @@
 export type TableStatus = "bos" | "dolu" | "hesap" | "rezerve";
 export type Route = "mutfak" | "bar";
 
+/** Ürün türü: yiyecek (mutfak) / içecek (bar). Kategoriyi ve route'u belirler. */
+export type Kind = "yiyecek" | "icecek";
+
 export interface Category {
   id: string;
   name: string;
   emoji: string;
   color: string;
+  /** Tür — yiyecek mi içecek mi. Tür seçici, gruplama ve route bundan türetilir. */
+  kind: Kind;
 }
+
+/** Tür seçenekleri (sıra önemli — UI bu sırayı kullanır). */
+export const KINDS: { id: Kind; label: string; route: Route }[] = [
+  { id: "yiyecek", label: "Yiyecek", route: "mutfak" },
+  { id: "icecek", label: "İçecek", route: "bar" },
+];
+
+/** Türe göre hazırlık yeri (route). */
+export const routeOfKind = (k: Kind): Route => (k === "icecek" ? "bar" : "mutfak");
 
 export interface Product {
   id: string;
@@ -77,14 +91,19 @@ const G = {
 const U = (id: string) =>
   `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=260&q=70`;
 
-/* ---------- Kategoriler ---------- */
+/* ---------- Kategoriler (tür: yiyecek=mutfak / içecek=bar) ---------- */
 export const CATS: Category[] = [
-  { id: "baslangic", name: "Başlangıçlar", emoji: "🥗", color: "#3a7d44" },
-  { id: "corba", name: "Çorbalar", emoji: "🍲", color: "#c9742b" },
-  { id: "izgara", name: "Izgara & Et", emoji: "🥩", color: "#c0492f" },
-  { id: "pizza", name: "Pizza & Makarna", emoji: "🍕", color: "#d96b2a" },
-  { id: "tatli", name: "Tatlılar", emoji: "🍰", color: "#8a5fb0" },
-  { id: "icecek", name: "İçecekler", emoji: "🥤", color: "#2a6f97" },
+  // Yiyecekler (route: mutfak)
+  { id: "baslangic", name: "Başlangıçlar", emoji: "🥗", color: "#3a7d44", kind: "yiyecek" },
+  { id: "corba", name: "Çorbalar", emoji: "🍲", color: "#c9742b", kind: "yiyecek" },
+  { id: "izgara", name: "Izgara & Et", emoji: "🥩", color: "#c0492f", kind: "yiyecek" },
+  { id: "burgerler", name: "Burgerler", emoji: "🍔", color: "#b5642a", kind: "yiyecek" },
+  { id: "pizza", name: "Pizza & Makarna", emoji: "🍕", color: "#d96b2a", kind: "yiyecek" },
+  { id: "tatli", name: "Tatlılar", emoji: "🍰", color: "#8a5fb0", kind: "yiyecek" },
+  // İçecekler (route: bar)
+  { id: "alkollu", name: "Alkollü", emoji: "🍷", color: "#7a2e4a", kind: "icecek" },
+  { id: "alkolsuz", name: "Alkolsüz", emoji: "🧃", color: "#2a6f97", kind: "icecek" },
+  { id: "soft", name: "Soft İçecek", emoji: "🥤", color: "#2a8fa7", kind: "icecek" },
 ];
 
 /* ---------- Ürünler ---------- */
@@ -104,6 +123,9 @@ export const PRODUCTS: Product[] = [
   { id: "i4", cat: "izgara", name: "Kuzu Pirzola", price: 420, emoji: "🥩", grad: G.kirmizi, img: U("1546833999-b9f581a1996d"), route: "mutfak" },
   { id: "i5", cat: "izgara", name: "Karışık Izgara", price: 480, emoji: "🍽️", grad: G.kirmizi, img: U("1544025162-d76694265947"), route: "mutfak" },
 
+  { id: "bg1", cat: "burgerler", name: "Klasik Burger", price: 210, emoji: "🍔", grad: G.amber, img: U("1568901346375-23c9450c58cd"), route: "mutfak" },
+  { id: "bg2", cat: "burgerler", name: "Cheeseburger", price: 235, emoji: "🍔", grad: G.kirmizi, img: U("1550547660-d9450f859349"), route: "mutfak" },
+
   { id: "z1", cat: "pizza", name: "Margherita Pizza", price: 190, emoji: "🍕", grad: G.kirmizi, img: U("1513104890138-7c749659a591"), route: "mutfak" },
   { id: "z2", cat: "pizza", name: "Karışık Pizza", price: 230, emoji: "🍕", grad: G.kirmizi, img: U("1565299624946-b28f40a0ae38"), route: "mutfak" },
   { id: "z3", cat: "pizza", name: "Penne Arrabiata", price: 175, emoji: "🍝", grad: G.kirmizi, img: U("1551183053-bf91a1d81141"), route: "mutfak" },
@@ -114,12 +136,12 @@ export const PRODUCTS: Product[] = [
   { id: "t3", cat: "tatli", name: "Cheesecake", price: 135, emoji: "🍰", grad: G.mor, img: U("1578985545062-69928b1d9587"), route: "mutfak" },
   { id: "t4", cat: "tatli", name: "Baklava (porsiyon)", price: 155, emoji: "🥮", grad: G.amber, img: U("1519676867240-f03562e64548"), route: "mutfak" },
 
-  { id: "d1", cat: "icecek", name: "Ayran", price: 35, emoji: "🥛", grad: G.mavi, img: U("1550583724-b2692b85b150"), route: "bar" },
-  { id: "d2", cat: "icecek", name: "Kola", price: 50, emoji: "🥤", grad: G.kirmizi, img: U("1554866585-cd94860890b7"), route: "bar" },
-  { id: "d3", cat: "icecek", name: "Taze Limonata", price: 65, emoji: "🍋", grad: G.amber, img: U("1437418747212-8d9709afab22"), route: "bar" },
-  { id: "d4", cat: "icecek", name: "Türk Kahvesi", price: 60, emoji: "☕", grad: G.kahve, img: U("1509042239860-f550ce710b93"), route: "bar" },
-  { id: "d5", cat: "icecek", name: "Çay", price: 25, emoji: "🫖", grad: G.kirmizi, img: U("1571934811356-5cc061b6821f"), route: "bar" },
-  { id: "d6", cat: "icecek", name: "Şalgam", price: 40, emoji: "🧃", grad: G.mor, img: U("1600271886742-f049cd451bba"), route: "bar" },
+  { id: "d1", cat: "alkolsuz", name: "Ayran", price: 35, emoji: "🥛", grad: G.mavi, img: U("1550583724-b2692b85b150"), route: "bar" },
+  { id: "d2", cat: "soft", name: "Kola", price: 50, emoji: "🥤", grad: G.kirmizi, img: U("1554866585-cd94860890b7"), route: "bar" },
+  { id: "d3", cat: "soft", name: "Taze Limonata", price: 65, emoji: "🍋", grad: G.amber, img: U("1437418747212-8d9709afab22"), route: "bar" },
+  { id: "d4", cat: "alkolsuz", name: "Türk Kahvesi", price: 60, emoji: "☕", grad: G.kahve, img: U("1509042239860-f550ce710b93"), route: "bar" },
+  { id: "d5", cat: "alkolsuz", name: "Çay", price: 25, emoji: "🫖", grad: G.kirmizi, img: U("1571934811356-5cc061b6821f"), route: "bar" },
+  { id: "d6", cat: "alkolsuz", name: "Şalgam", price: 40, emoji: "🧃", grad: G.mor, img: U("1600271886742-f049cd451bba"), route: "bar" },
 ];
 
 export const prodById: Record<string, Product> = Object.fromEntries(

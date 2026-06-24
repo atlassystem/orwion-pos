@@ -164,7 +164,7 @@ export const MODULES: { id: ModuleId; label: string }[] = [
   { id: "siramatik", label: "Sıramatik" },
   { id: "menu", label: "Menü" },
   { id: "menu_yonetim", label: "Menü Yönetimi" },
-  { id: "stok", label: "Stok & Envanter" },
+  { id: "stok", label: "Stok & Reçeteler" },
   { id: "personel", label: "Personel" },
   { id: "rapor", label: "Raporlar" },
   { id: "subeler", label: "Şubeler" },

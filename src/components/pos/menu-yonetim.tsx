@@ -17,11 +17,14 @@ import {
 import { cn } from "@/lib/utils";
 import {
   TL,
+  KINDS,
+  routeOfKind,
   DEFAULT_PRODUCT_EMOJI,
   DEFAULT_PRODUCT_GRAD,
   type Product,
   type Category,
   type Route,
+  type Kind,
 } from "@/lib/pos-data";
 import { uploadProductImage } from "@/lib/pos-api";
 import { Food } from "./food";
@@ -83,12 +86,29 @@ export function MenuYonetim({
   onDelete: (id: string) => void;
 }) {
   const { canEdit } = usePerms();
-  const [cat, setCat] = useState("hepsi");
+  const [kind, setKind] = useState<"hepsi" | Kind>("hepsi");
   // null = kapalı, "new" = ekleme, Product = düzenleme
   const [editing, setEditing] = useState<Product | "new" | null>(null);
 
-  const list = products.filter((p) => (cat === "hepsi" ? true : p.cat === cat));
   const barCount = products.filter((p) => p.route === "bar").length;
+
+  // Tür/kategoriye göre gruplama: seçili türdeki kategoriler + (kategorisi
+  // bulunamayan ürünler için) "Diğer" grubu. Yalnızca ürünü olan gruplar gösterilir.
+  const shownCats = cats
+    .filter((c) => kind === "hepsi" || c.kind === kind)
+    // Yiyecek grupları önce, içecekler sonra (kararlı sıralama).
+    .sort((a, b) => (a.kind === "icecek" ? 1 : 0) - (b.kind === "icecek" ? 1 : 0));
+  const groups = shownCats
+    .map((c) => ({ c, items: products.filter((p) => p.cat === c.id) }))
+    .filter((g) => g.items.length > 0);
+  if (kind === "hepsi") {
+    const orphan = products.filter((p) => !cats.some((c) => c.id === p.cat));
+    if (orphan.length)
+      groups.push({
+        c: { id: "diger", name: "Diğer", emoji: "🍽️", color: "#94a3b8", kind: "yiyecek" },
+        items: orphan,
+      });
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -109,81 +129,78 @@ export function MenuYonetim({
         <Stat icon={Soup} label="Mutfak / Bar" value={products.length - barCount + " / " + barCount} tone="green" />
       </div>
 
+      {/* Tür filtresi (Tümü / Yiyecek / İçecek) */}
       <div className="mb-4 flex flex-wrap items-center gap-2 px-7">
-        <Tab on={cat === "hepsi"} onClick={() => setCat("hepsi")}>
+        <Tab on={kind === "hepsi"} onClick={() => setKind("hepsi")}>
           Tümü
         </Tab>
-        {cats.map((c) => {
-          const Ic = catIcon(c.id);
-          return (
-            <Tab key={c.id} on={cat === c.id} onClick={() => setCat(c.id)}>
-              <span className="inline-flex items-center gap-1.5">
-                <Ic className="h-4 w-4" strokeWidth={2.1} />
-                {c.name}
-              </span>
-            </Tab>
-          );
-        })}
+        {KINDS.map((k) => (
+          <Tab key={k.id} on={kind === k.id} onClick={() => setKind(k.id)}>
+            {k.label}
+          </Tab>
+        ))}
       </div>
 
-      <div className="scroll-light overflow-y-auto px-7 pb-7">
-        <div className="pos-card overflow-hidden">
-          <div className="grid grid-cols-[2.4fr_1.4fr_1fr_1fr_104px] gap-3 border-b border-line bg-surface2 px-5 py-3 text-[11px] font-bold tracking-wide text-ink3 uppercase">
-            <span>Ürün</span>
-            <span>Kategori</span>
-            <span>Hazırlık</span>
-            <span className="text-right">Fiyat</span>
-            <span className="text-right">İşlem</span>
+      {/* Kategoriye göre gruplanmış liste */}
+      <div className="scroll-light space-y-4 overflow-y-auto px-7 pb-7">
+        {groups.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-line2 py-10 text-center text-sm text-ink3">
+            Ürün yok.
           </div>
-          {list.length === 0 && (
-            <div className="px-5 py-10 text-center text-sm text-ink3">
-              Bu kategoride ürün yok.
-            </div>
-          )}
-          {list.map((p) => (
-            <div
-              key={p.id}
-              className="grid grid-cols-[2.4fr_1.4fr_1fr_1fr_104px] items-center gap-3 border-b border-line px-5 py-3 last:border-0 hover:bg-surface2/60"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-10 w-10 shrink-0 rounded-lg" />
-                <span className="truncate text-sm font-bold text-ink">{p.name}</span>
-              </div>
-              <span className="text-xs font-semibold text-ink2">
-                {cats.find((c) => c.id === p.cat)?.name ?? p.cat}
-              </span>
-              <span
-                className={cn(
-                  "w-fit rounded-full px-2 py-0.5 text-[11px] font-bold",
-                  p.route === "bar" ? "bg-sky-100 text-sky-700" : "bg-orange-100 text-orange-700",
-                )}
-              >
-                {p.route === "bar" ? "Bar" : "Mutfak"}
-              </span>
-              <span className="font-display tnum text-right text-sm font-extrabold text-brand">
-                {TL(p.price)}
-              </span>
-              <div className="flex items-center justify-end gap-1.5">
-                <button
-                  onClick={() => canEdit && setEditing(p)}
-                  disabled={!canEdit}
-                  aria-label="Düzenle"
-                  className="grid h-9 w-9 place-items-center rounded-xl border border-line2 bg-white text-ink2 transition hover:bg-surface2 hover:text-ink disabled:opacity-40"
+        )}
+        {groups.map(({ c, items }) => {
+          const Ic = catIcon(c.id);
+          const bar = c.kind === "icecek";
+          return (
+            <div key={c.id} className="pos-card overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-line bg-surface2 px-5 py-3">
+                <Ic className="h-4 w-4 text-ink3" strokeWidth={2.2} />
+                <span className="text-sm font-extrabold text-ink">{c.name}</span>
+                <span className="text-[12px] text-ink3">· {items.length} ürün</span>
+                <span
+                  className={cn(
+                    "ml-auto w-fit rounded-full px-2 py-0.5 text-[11px] font-bold",
+                    bar ? "bg-sky-100 text-sky-700" : "bg-orange-100 text-orange-700",
+                  )}
                 >
-                  <SquarePen className="h-4 w-4" strokeWidth={2.2} />
-                </button>
-                <button
-                  onClick={() => canEdit && onDelete(p.id)}
-                  disabled={!canEdit}
-                  aria-label="Sil"
-                  className="grid h-9 w-9 place-items-center rounded-xl border border-line2 bg-white text-ink3 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
-                >
-                  <Trash2 className="h-4 w-4" strokeWidth={2.2} />
-                </button>
+                  {bar ? "Bar" : "Mutfak"}
+                </span>
               </div>
+              {items.map((p) => (
+                <div
+                  key={p.id}
+                  className="grid grid-cols-[2.6fr_1fr_104px] items-center gap-3 border-b border-line px-5 py-3 last:border-0 hover:bg-surface2/60"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-10 w-10 shrink-0 rounded-lg" />
+                    <span className="truncate text-sm font-bold text-ink">{p.name}</span>
+                  </div>
+                  <span className="font-display tnum text-right text-sm font-extrabold text-brand">
+                    {TL(p.price)}
+                  </span>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      onClick={() => canEdit && setEditing(p)}
+                      disabled={!canEdit}
+                      aria-label="Düzenle"
+                      className="grid h-9 w-9 place-items-center rounded-xl border border-line2 bg-white text-ink2 transition hover:bg-surface2 hover:text-ink disabled:opacity-40"
+                    >
+                      <SquarePen className="h-4 w-4" strokeWidth={2.2} />
+                    </button>
+                    <button
+                      onClick={() => canEdit && onDelete(p.id)}
+                      disabled={!canEdit}
+                      aria-label="Sil"
+                      className="grid h-9 w-9 place-items-center rounded-xl border border-line2 bg-white text-ink3 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       {editing && (
@@ -216,13 +233,29 @@ function ProductModal({
   onClose: () => void;
   onSave: (d: Draft) => void;
 }) {
+  // Düzenlenen ürünün türünü kategorisinden çıkar (yoksa varsayılan yiyecek).
+  const initialKind: Kind =
+    cats.find((c) => c.id === product?.cat)?.kind ?? "yiyecek";
+  const [kind, setKind] = useState<Kind>(initialKind);
   const [name, setName] = useState(product?.name ?? "");
-  const [catId, setCatId] = useState(product?.cat ?? cats[0]?.id ?? "");
+  const catsOfKind = cats.filter((c) => c.kind === kind);
+  const [catId, setCatId] = useState(
+    product?.cat ?? catsOfKind[0]?.id ?? cats[0]?.id ?? "",
+  );
   const [price, setPrice] = useState(product?.price ?? 0);
-  const [route, setRoute] = useState<Route>(product?.route ?? "mutfak");
   const [img, setImg] = useState(product?.img ?? "");
   const [uploading, setUploading] = useState(false);
   const [imgErr, setImgErr] = useState("");
+
+  // Route türden türetilir (yiyecek→mutfak, içecek→bar).
+  const route: Route = routeOfKind(kind);
+
+  // Tür değişince, kategori o türde değilse ilk uygun kategoriye geç.
+  const pickKind = (k: Kind) => {
+    setKind(k);
+    const inKind = cats.filter((c) => c.kind === k);
+    if (!inKind.some((c) => c.id === catId)) setCatId(inKind[0]?.id ?? "");
+  };
 
   const valid = name.trim().length > 0 && !!catId && price >= 0 && !uploading;
 
@@ -319,22 +352,50 @@ function ProductModal({
             />
           </label>
 
-          <label className="block">
-            <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Kategori</span>
-            <select
-              value={catId}
-              onChange={(e) => setCatId(e.target.value)}
-              className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
-            >
-              {cats.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Tür — önce yiyecek mi içecek mi (kategori ve hazırlık bundan gelir) */}
+          <div>
+            <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Tür</span>
+            <div className="grid grid-cols-2 gap-2">
+              {KINDS.map((k) => {
+                const on = kind === k.id;
+                return (
+                  <button
+                    key={k.id}
+                    type="button"
+                    onClick={() => pickKind(k.id)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2.5 text-sm font-bold transition",
+                      on
+                        ? "border-brand bg-brand text-white shadow-sm shadow-brand/30"
+                        : "border-line2 bg-surface2 text-ink2 hover:bg-white hover:text-ink",
+                    )}
+                  >
+                    {k.label}
+                    <span className={cn("ml-1.5 text-[11px] font-semibold", on ? "text-white/80" : "text-ink3")}>
+                      · {k.route === "bar" ? "Bar" : "Mutfak"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Kategori</span>
+              <select
+                value={catId}
+                onChange={(e) => setCatId(e.target.value)}
+                className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
+              >
+                {catsOfKind.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label className="block">
               <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Fiyat (₺)</span>
               <input
@@ -345,18 +406,6 @@ function ProductModal({
                 onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
                 className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3.5 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
               />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Hazırlık</span>
-              <select
-                value={route}
-                onChange={(e) => setRoute(e.target.value as Route)}
-                className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
-              >
-                <option value="mutfak">Mutfak</option>
-                <option value="bar">Bar</option>
-              </select>
             </label>
           </div>
         </div>

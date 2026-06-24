@@ -29,6 +29,7 @@ import {
   payTableApi,
   saveRecipes,
   saveStaff,
+  deleteStaff,
   saveStockQty,
   createProduct,
   updateProduct,
@@ -164,6 +165,13 @@ export function PosApp() {
       void saveStaff(next);
       return next;
     });
+
+  // Personel sil: belgeyi (kimlik dahil) sunucudan sil, listeden çıkar.
+  const removeStaff = async (id: string) => {
+    const ok = await deleteStaff(id);
+    if (!ok) return;
+    setStaffState((prev) => prev.filter((s) => s.id !== id));
+  };
 
   // Stok girişi: yeni mutlak miktarı yaz + kalıcı kaydet.
   const stockIn = (id: string, qty: number) => {
@@ -364,6 +372,7 @@ export function PosApp() {
             <Personel
               staff={staff}
               setStaff={setStaff}
+              onDelete={removeStaff}
               canManage={authUser.level === "admin"}
             />
           )}

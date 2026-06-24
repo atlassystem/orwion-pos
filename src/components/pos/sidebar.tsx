@@ -58,7 +58,7 @@ const OPERATION: { label: string; items: NavItem[] } = {
 /** Açılır "Ayarlar" başlığı altındaki alt-sekmeler. */
 const SETTINGS_ITEMS: NavItem[] = [
   { id: "menu_yonetim", label: "Menü Yönetimi", ic: ClipboardList },
-  { id: "stok", label: "Stok & Envanter", ic: Boxes, badge: "3" },
+  { id: "stok", label: "Stok & Reçeteler", ic: Boxes, badge: "3" },
   { id: "personel", label: "Personel", ic: Users },
   { id: "subeler", label: "Şubeler", ic: Building2 },
   { id: "ayarlar", label: "Genel", ic: Settings },

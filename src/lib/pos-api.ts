@@ -152,6 +152,12 @@ export async function saveStaff(list: Staff[]): Promise<void> {
   await fetch("/api/staff", json("PUT", list));
 }
 
+/** Personeli siler (kimlik bilgileri de belge ile birlikte gider). */
+export async function deleteStaff(id: string): Promise<boolean> {
+  const res = await fetch(`/api/staff/${encodeURIComponent(id)}`, json("DELETE"));
+  return res.ok;
+}
+
 /* ---------- Kimlik doğrulama (auth) ---------- */
 export interface AuthResult {
   ok: boolean;

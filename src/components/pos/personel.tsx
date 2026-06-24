@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   SquarePen,
   KeyRound,
+  Trash2,
   Eye,
   EyeOff,
   X,
@@ -33,10 +34,12 @@ import { PrimaryButton, Stat, TopBar } from "./ui";
 export function Personel({
   staff,
   setStaff,
+  onDelete,
   canManage,
 }: {
   staff: Staff[];
   setStaff: Dispatch<SetStateAction<Staff[]>>;
+  onDelete: (id: string) => void;
   canManage: boolean;
 }) {
   // null = kapalı, "new" = ekleme, Staff = düzenleme
@@ -102,6 +105,14 @@ export function Personel({
             upsert(s);
             setEditing(null);
           }}
+          onDelete={
+            editing !== "new"
+              ? () => {
+                  onDelete(editing.id);
+                  setEditing(null);
+                }
+              : undefined
+          }
         />
       )}
 
@@ -242,15 +253,18 @@ function StaffModal({
   initial,
   onClose,
   onSave,
+  onDelete,
 }: {
   initial?: Staff;
   onClose: () => void;
   onSave: (s: Staff) => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [role, setRole] = useState(initial?.role ?? "Garson");
   const [level, setLevel] = useState<AccessLevel>(initial?.level ?? "personel");
   const [access, setAccess] = useState<ModuleId[]>(initial?.access ?? ["siramatik"]);
+  const [confirmDel, setConfirmDel] = useState(false);
 
   const scoped = LEVELS[level].scoped;
   const valid = name.trim().length > 1 && (!scoped || access.length > 0);
@@ -386,21 +400,55 @@ function StaffModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
-          <button
-            onClick={onClose}
-            className="rounded-xl border border-line2 bg-white px-4 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
-          >
-            Vazgeç
-          </button>
-          <button
-            onClick={save}
-            disabled={!valid}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-          >
-            <Check className="h-4 w-4" strokeWidth={2.6} />
-            Kaydet
-          </button>
+        <div className="flex items-center justify-between gap-2 border-t border-line px-6 py-4">
+          {/* Sol: Sil (yalnızca düzenlemede, onaylı) */}
+          <div>
+            {onDelete &&
+              (confirmDel ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-semibold text-rose-600">Emin misiniz?</span>
+                  <button
+                    onClick={onDelete}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-rose-700"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2.4} />
+                    Evet, sil
+                  </button>
+                  <button
+                    onClick={() => setConfirmDel(false)}
+                    className="rounded-xl border border-line2 bg-white px-3 py-2 text-xs font-bold text-ink2 transition hover:bg-surface2"
+                  >
+                    Vazgeç
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDel(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-line2 bg-white px-3 py-2.5 text-sm font-bold text-rose-600 transition hover:bg-rose-50"
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                  Sil
+                </button>
+              ))}
+          </div>
+
+          {/* Sağ: Vazgeç / Kaydet */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-xl border border-line2 bg-white px-4 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
+            >
+              Vazgeç
+            </button>
+            <button
+              onClick={save}
+              disabled={!valid}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+            >
+              <Check className="h-4 w-4" strokeWidth={2.6} />
+              Kaydet
+            </button>
+          </div>
         </div>
       </div>
     </div>
