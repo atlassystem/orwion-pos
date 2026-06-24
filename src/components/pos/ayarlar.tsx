@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ComponentType } from "react";
 import type { LucideProps } from "lucide-react";
+import QRCode from "qrcode";
 import {
   Settings,
   QrCode,
@@ -15,6 +16,8 @@ import {
   Bell,
   CreditCard,
   ChevronRight,
+  X,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMING_MODULES } from "@/lib/pos-modules";
@@ -36,9 +39,12 @@ const TOGGLES: { key: string; label: string; desc: string; ic: ComponentType<Luc
 ];
 
 export function Ayarlar() {
+  const [qrOpen, setQrOpen] = useState(false);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TopBar title="Ayarlar & Modüller" icon={Settings} sub="Sistem yapılandırması ve eklentiler" />
+
+      {qrOpen && <QrModal onClose={() => setQrOpen(false)} />}
 
       <div className="scroll-light space-y-5 overflow-y-auto px-7 pb-7">
         {/* Modüller */}
@@ -50,8 +56,13 @@ export function Ayarlar() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {COMING_MODULES.map((m) => {
               const Ic = MOD_ICON[m.key] ?? Settings;
+              const isQr = m.key === "qr";
               return (
-                <div key={m.key} className="pos-card lift cursor-pointer p-5">
+                <div
+                  key={m.key}
+                  onClick={() => isQr && setQrOpen(true)}
+                  className="pos-card lift cursor-pointer p-5"
+                >
                   <div className="mb-3 flex items-center justify-between">
                     <div className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-soft text-brand">
                       <Ic className="h-5 w-5" strokeWidth={2.1} />
@@ -86,6 +97,98 @@ export function Ayarlar() {
             ))}
           </div>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   QR Menü modalı — /self adresine giden tek QR (göster + yazdır).
+   ============================================================ */
+function QrModal({ onClose }: { onClose: () => void }) {
+  const [dataUrl, setDataUrl] = useState("");
+  const [url] = useState(() =>
+    typeof window !== "undefined" ? window.location.origin + "/self" : "/self",
+  );
+
+  useEffect(() => {
+    QRCode.toDataURL(url, { width: 320, margin: 2 })
+      .then(setDataUrl)
+      .catch(() => {});
+  }, [url]);
+
+  const print = () => {
+    const w = window.open("", "_blank", "width=480,height=680");
+    if (!w) return;
+    w.document.write(
+      `<html><head><title>Orwion QR Menü</title></head>` +
+        `<body style="font-family:system-ui,sans-serif;text-align:center;padding:32px;color:#18191f">` +
+        `<h2 style="margin:0 0 4px">Orwion POS — QR Menü</h2>` +
+        `<p style="margin:0 0 16px;color:#666">Karekodu okutun, masanıza sipariş verin</p>` +
+        `<img src="${dataUrl}" style="width:320px;height:320px"/>` +
+        `<p style="color:#888;font-size:12px;margin-top:12px">${url}</p>` +
+        `</body></html>`,
+    );
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  };
+
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm">
+      <div className="pop flex w-full max-w-sm flex-col overflow-hidden rounded-[1.25rem] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h3 className="flex items-center gap-2 font-display text-lg font-extrabold text-ink">
+            <QrCode className="h-5 w-5 text-brand" strokeWidth={2.2} />
+            QR Menü & Self-Sipariş
+          </h3>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg text-ink3 transition hover:bg-surface2 hover:text-ink"
+          >
+            <X className="h-4.5 w-4.5" strokeWidth={2.2} />
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center px-6 py-6">
+          <p className="mb-4 text-center text-[13px] text-ink2">
+            Tek karekod — misafir şube + masa seçip sipariş verir. Ödeme yok; personel POS&apos;tan kapatır.
+          </p>
+          <div className="grid h-[280px] w-[280px] place-items-center rounded-2xl border border-line2 bg-white p-2">
+            {dataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={dataUrl} alt="QR Menü" className="h-full w-full" />
+            ) : (
+              <span className="text-sm text-ink3">QR üretiliyor…</span>
+            )}
+          </div>
+          <a
+            href="/self"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-brand hover:underline"
+          >
+            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.4} />
+            {url || "/self"}
+          </a>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-line2 bg-white px-4 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
+          >
+            Kapat
+          </button>
+          <button
+            onClick={print}
+            disabled={!dataUrl}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:opacity-40"
+          >
+            <Printer className="h-4 w-4" strokeWidth={2.2} />
+            Yazdır
+          </button>
+        </div>
       </div>
     </div>
   );
