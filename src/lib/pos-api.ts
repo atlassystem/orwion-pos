@@ -72,6 +72,61 @@ export async function fetchReportSummary(
   };
 }
 
+/* ---------- Günlük / Dönemsel satış raporu ---------- */
+export interface SalesDayRow {
+  date: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  orderCount: number;
+}
+export interface SalesProductRow {
+  pid: string;
+  name: string;
+  qty: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+}
+export interface SalesMethodRow {
+  method: string;
+  count: number;
+  amount: number;
+}
+export interface SalesReport {
+  summary: ReportSummary;
+  byDay: SalesDayRow[];
+  byProduct: SalesProductRow[];
+  byMethod: SalesMethodRow[];
+}
+
+const EMPTY_SALES: SalesReport = {
+  summary: { revenue: 0, cost: 0, profit: 0, margin: 0, orderCount: 0 },
+  byDay: [],
+  byProduct: [],
+  byMethod: [],
+};
+
+/** Bir şube + [from..to] aralığı için satış raporu (uçlar dahil). from=to → günlük. */
+export async function fetchSalesReport(
+  from: string,
+  to: string,
+  branch: string,
+): Promise<SalesReport> {
+  const qs =
+    `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+    `&branch=${encodeURIComponent(branch)}`;
+  const res = await fetch(`/api/report/sales${qs}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("report_failed");
+  const d = await res.json();
+  return {
+    summary: { ...EMPTY_SALES.summary, ...(d.summary ?? {}) },
+    byDay: Array.isArray(d.byDay) ? d.byDay : [],
+    byProduct: Array.isArray(d.byProduct) ? d.byProduct : [],
+    byMethod: Array.isArray(d.byMethod) ? d.byMethod : [],
+  };
+}
+
 /* ---------- Sedna maliyet kataloğu (reçete malzeme araması) ---------- */
 /** code/ad ile Sedna ürünü arar (reçete malzemesi seçimi için). */
 export async function searchSedna(q: string): Promise<SednaProduct[]> {
