@@ -13,10 +13,11 @@ import {
   Package,
   CreditCard,
   CalendarRange,
+  FileDown,
 } from "lucide-react";
 import { TL } from "@/lib/pos-data";
 import { fetchSalesReport, type SalesReport } from "@/lib/pos-api";
-import { Stat, TopBar, Card, Tab } from "./ui";
+import { Stat, TopBar, Card, Tab, GhostButton } from "./ui";
 
 /**
  * Raporlar — Günlük / Dönemsel satış raporu (GERÇEK satışlardan).
@@ -49,6 +50,158 @@ const EMPTY: SalesReport = {
 };
 
 type Mode = "gun" | "donem";
+
+/* ============================================================
+   PDF çıktısı — tarayıcının "Yazdır → PDF olarak kaydet" akışı.
+   Ek kütüphane yok: raporu temiz bir HTML'e dökeriz, gizli bir
+   iframe içinde yazdırma penceresini açarız. Kullanıcı hedef
+   olarak "PDF olarak kaydet"i seçerek dosyayı indirir.
+   ============================================================ */
+
+/** HTML enjeksiyonuna karşı metin kaçışı (ürün adları vb.). */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Seçili raporu yazdırılabilir tam HTML belgesine dönüştürür. */
+function buildReportHtml(
+  d: SalesReport,
+  opts: { mode: Mode; branchName: string; scope: string },
+): string {
+  const s = d.summary;
+  const multiDay = d.byDay.length > 1;
+  const baslik = opts.mode === "gun" ? "Günlük Satış Raporu" : "Dönemsel Satış Raporu";
+
+  const ozetRows = [
+    ["Toplam Ciro", TL(s.revenue)],
+    ["Toplam Maliyet", TL(s.cost)],
+    ["Kâr", TL(s.profit)],
+    ["Kâr Marjı", "%" + s.margin],
+    ["Adisyon Sayısı", String(s.orderCount)],
+  ]
+    .map(
+      ([k, v]) =>
+        `<tr><td>${esc(k)}</td><td class="num">${esc(v)}</td></tr>`,
+    )
+    .join("");
+
+  const gunlukTablo =
+    multiDay && s.orderCount > 0
+      ? `<h2>Günlük Dağılım</h2>
+         <table class="grid">
+           <thead><tr><th>Tarih</th><th class="num">Ciro</th><th class="num">Maliyet</th><th class="num">Kâr</th><th class="num">Adisyon</th></tr></thead>
+           <tbody>${d.byDay
+             .map(
+               (r) =>
+                 `<tr><td>${esc(r.date)}</td><td class="num">${esc(TL(r.revenue))}</td><td class="num">${esc(TL(r.cost))}</td><td class="num">${esc(TL(r.profit))}</td><td class="num">${r.orderCount}</td></tr>`,
+             )
+             .join("")}</tbody>
+         </table>`
+      : "";
+
+  const urunTablo =
+    s.orderCount > 0
+      ? `<h2>En Çok Satan Ürünler</h2>
+         <table class="grid">
+           <thead><tr><th>Ürün</th><th class="num">Adet</th><th class="num">Ciro</th><th class="num">Kâr</th></tr></thead>
+           <tbody>${d.byProduct
+             .map(
+               (p) =>
+                 `<tr><td>${esc(p.name)}</td><td class="num">${p.qty}</td><td class="num">${esc(TL(p.revenue))}</td><td class="num">${esc(TL(p.profit))}</td></tr>`,
+             )
+             .join("")}</tbody>
+         </table>`
+      : "";
+
+  const odemeTablo =
+    s.orderCount > 0
+      ? `<h2>Ödeme Türü</h2>
+         <table class="grid">
+           <thead><tr><th>Tür</th><th class="num">Adisyon</th><th class="num">Tutar</th><th class="num">Pay</th></tr></thead>
+           <tbody>${d.byMethod
+             .map((m) => {
+               const pct =
+                 s.revenue > 0 ? Math.round((m.amount / s.revenue) * 100) : 0;
+               return `<tr><td>${esc(methodLabel(m.method))}</td><td class="num">${m.count}</td><td class="num">${esc(TL(m.amount))}</td><td class="num">%${pct}</td></tr>`;
+             })
+             .join("")}</tbody>
+         </table>`
+      : "";
+
+  const bos =
+    s.orderCount === 0
+      ? `<p class="empty">Seçili kapsam için ${esc(opts.branchName)} şubesinde kapanmış adisyon yok.</p>`
+      : "";
+
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8">
+<title>${esc(baslik)} — ${esc(opts.branchName)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1f2937; margin: 28px; font-size: 12px; }
+  header { border-bottom: 2px solid #ea580c; padding-bottom: 10px; margin-bottom: 16px; }
+  header h1 { margin: 0; font-size: 18px; color: #111827; }
+  header .meta { margin-top: 4px; color: #6b7280; font-size: 12px; }
+  h2 { font-size: 13px; margin: 18px 0 6px; color: #111827; }
+  table { width: 100%; border-collapse: collapse; }
+  table.summary td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; }
+  table.summary td:first-child { color: #6b7280; }
+  table.grid th, table.grid td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; text-align: left; }
+  table.grid th { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { color: #6b7280; padding: 14px 0; }
+  footer { margin-top: 24px; color: #9ca3af; font-size: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+  @media print { body { margin: 12mm; } }
+</style></head>
+<body>
+  <header>
+    <h1>${esc(baslik)}</h1>
+    <div class="meta">${esc(opts.branchName)} · ${esc(opts.scope)}</div>
+  </header>
+  <h2>Özet</h2>
+  <table class="summary"><tbody>${ozetRows}</tbody></table>
+  ${bos}
+  ${gunlukTablo}
+  ${urunTablo}
+  ${odemeTablo}
+  <footer>Orwion POS — Satış Raporu</footer>
+</body></html>`;
+}
+
+/** HTML'i gizli iframe'de açıp yazdırma diyaloğunu tetikler. */
+function printHtml(html: string): void {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText =
+    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(iframe);
+  const win = iframe.contentWindow;
+  const doc = win?.document;
+  if (!win || !doc) {
+    iframe.remove();
+    return;
+  }
+  let removed = false;
+  const cleanup = () => {
+    if (removed) return;
+    removed = true;
+    iframe.remove();
+  };
+  doc.open();
+  doc.write(html);
+  doc.close();
+  win.onafterprint = cleanup;
+  // İçerik yerleşsin diye küçük gecikme; sonra yazdır.
+  setTimeout(() => {
+    win.focus();
+    win.print();
+    // Bazı tarayıcılarda onafterprint tetiklenmez → güvenli temizlik.
+    setTimeout(cleanup, 60_000);
+  }, 250);
+}
 
 export function Rapor({
   branchId,
@@ -108,6 +261,15 @@ export function Rapor({
     setDates((p) => ({ ...p, from: t.slice(0, 8) + "01", to: t }));
   };
 
+  // PDF çıktısı: o anki seçili rapor → yazdır/PDF olarak kaydet.
+  const exportPdf = () => {
+    const scope =
+      mode === "gun"
+        ? day || "—"
+        : `${range.from || "—"} → ${range.to || "—"}`;
+    printHtml(buildReportHtml(d, { mode, branchName, scope }));
+  };
+
   const dateInput =
     "bg-transparent text-sm font-bold text-ink outline-none";
   const dateBox =
@@ -120,6 +282,14 @@ export function Rapor({
         icon={BarChart3}
         right={
           <div className="flex items-center gap-2">
+            <GhostButton
+              icon={FileDown}
+              onClick={exportPdf}
+              disabled={!data}
+              className="py-2"
+            >
+              PDF İndir
+            </GhostButton>
             {mode === "gun" ? (
               <label className={dateBox}>
                 <CalendarDays className="h-4 w-4 text-ink3" strokeWidth={2.2} />
