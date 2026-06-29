@@ -19,6 +19,8 @@ import {
   TL,
   KINDS,
   routeOfKind,
+  ALLERGENS,
+  MEATS,
   DEFAULT_PRODUCT_EMOJI,
   DEFAULT_PRODUCT_GRAD,
   type Product,
@@ -39,6 +41,11 @@ type Draft = {
   price: number;
   route: Route;
   img: string;
+  /* Yönetmelik şeffaflık alanları */
+  kcal: number;
+  allergens: string[];
+  meat: string;
+  content: string;
 };
 
 /** Görseli istemcide en fazla ~800px'e küçültüp JPEG dataURL döndürür. */
@@ -173,7 +180,16 @@ export function MenuYonetim({
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-10 w-10 shrink-0 rounded-lg" />
-                    <span className="truncate text-sm font-bold text-ink">{p.name}</span>
+                    <div className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-ink">{p.name}</span>
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-semibold text-ink3">
+                        {p.kcal ? <span>{p.kcal} kcal</span> : null}
+                        {p.meat && p.meat !== "Yok" ? <span className="text-rose-500">Et: {p.meat}</span> : null}
+                        {p.allergens && p.allergens.length > 0 ? (
+                          <span className="text-amber-600">{p.allergens.length} alerjen</span>
+                        ) : null}
+                      </span>
+                    </div>
                   </div>
                   <span className="font-display tnum text-right text-sm font-extrabold text-brand">
                     {TL(p.price)}
@@ -247,6 +263,14 @@ function ProductModal({
   const [uploading, setUploading] = useState(false);
   const [imgErr, setImgErr] = useState("");
 
+  // Yönetmelik şeffaflık alanları.
+  const [kcal, setKcal] = useState(product?.kcal ?? 0);
+  const [meat, setMeat] = useState(product?.meat ?? "Yok");
+  const [allergens, setAllergens] = useState<string[]>(product?.allergens ?? []);
+  const [content, setContent] = useState(product?.content ?? "");
+  const toggleAllergen = (a: string) =>
+    setAllergens((xs) => (xs.includes(a) ? xs.filter((x) => x !== a) : [...xs, a]));
+
   // Route türden türetilir (yiyecek→mutfak, içecek→bar).
   const route: Route = routeOfKind(kind);
 
@@ -279,7 +303,7 @@ function ProductModal({
 
   return (
     <div className="fixed inset-0 z-30 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm">
-      <div className="pop flex w-full max-w-md flex-col overflow-hidden rounded-[1.25rem] bg-white shadow-2xl">
+      <div className="pop flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-[1.25rem] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <h3 className="flex items-center gap-2 font-display text-lg font-extrabold text-ink">
             <ClipboardList className="h-5 w-5 text-brand" strokeWidth={2.2} />
@@ -293,7 +317,7 @@ function ProductModal({
           </button>
         </div>
 
-        <div className="space-y-4 px-6 py-5">
+        <div className="scroll-light flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {/* Fotoğraf — seç + önizleme (foto yoksa emoji/gradyan) */}
           <div className="flex items-center gap-3">
             <Food
@@ -408,6 +432,81 @@ function ProductModal({
               />
             </label>
           </div>
+
+          {/* ---- Yönetmelik şeffaflık alanları (QR menüde gösterilir) ---- */}
+          <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+            <div className="mb-3 flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-amber-700 uppercase">
+              <Tags className="h-3.5 w-3.5" strokeWidth={2.4} />
+              Menü Bilgisi (Yönetmelik)
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Kalori (kcal)</span>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={kcal}
+                  onChange={(e) => setKcal(parseInt(e.target.value) || 0)}
+                  placeholder="Örn. 520"
+                  className="h-11 w-full rounded-xl border border-line2 bg-white px-3.5 text-sm font-semibold text-ink outline-none transition placeholder:font-normal placeholder:text-ink3 focus:border-brand/60"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Et Türü</span>
+                <select
+                  value={meat}
+                  onChange={(e) => setMeat(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-line2 bg-white px-3 text-sm font-semibold text-ink outline-none transition focus:border-brand/60"
+                >
+                  {MEATS.map((m) => (
+                    <option key={m} value={m}>
+                      {m === "Yok" ? "Et yok / etsiz" : m}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-3">
+              <span className="mb-1.5 block text-[12px] font-semibold text-ink2">
+                Alerjenler <span className="font-normal text-ink3">(içerikte bulunanları seçin)</span>
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {ALLERGENS.map((a) => {
+                  const on = allergens.includes(a);
+                  return (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => toggleAllergen(a)}
+                      className={cn(
+                        "rounded-lg px-2.5 py-1.5 text-[12px] font-bold transition ring-1",
+                        on
+                          ? "bg-rose-500 text-white ring-rose-500"
+                          : "bg-white text-ink2 ring-line2 hover:bg-surface2",
+                      )}
+                    >
+                      {a}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-[12px] font-semibold text-ink2">İçerik / Açıklama</span>
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={2}
+                placeholder="Örn. Elde kıyılmış kuzu eti, kuyruk yağı, acı biber; közde pişirilir."
+                className="w-full resize-none rounded-xl border border-line2 bg-white px-3.5 py-2.5 text-sm font-semibold text-ink outline-none transition placeholder:font-normal placeholder:text-ink3 focus:border-brand/60"
+              />
+            </label>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
@@ -419,7 +518,18 @@ function ProductModal({
           </button>
           <button
             onClick={() =>
-              valid && onSave({ name: name.trim(), cat: catId, price, route, img })
+              valid &&
+              onSave({
+                name: name.trim(),
+                cat: catId,
+                price,
+                route,
+                img,
+                kcal,
+                allergens,
+                meat,
+                content: content.trim(),
+              })
             }
             disabled={!valid}
             className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:cursor-not-allowed disabled:opacity-40"

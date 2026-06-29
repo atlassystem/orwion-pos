@@ -82,8 +82,17 @@ export function Menu({
                       <div className="line-clamp-1 text-sm leading-tight font-bold text-ink">
                         {p.name}
                       </div>
-                      <div className="mb-2 text-[11px] font-semibold text-ink3">
+                      <div className="text-[11px] font-semibold text-ink3">
                         {c.name} · {p.route === "bar" ? "Bar" : "Mutfak"}
+                      </div>
+                      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-semibold">
+                        {p.kcal ? <span className="text-ink3">{p.kcal} kcal</span> : null}
+                        {p.meat && p.meat !== "Yok" ? (
+                          <span className="text-rose-500">{p.meat}</span>
+                        ) : null}
+                        {p.allergens && p.allergens.length > 0 ? (
+                          <span className="text-amber-600">⚠ {p.allergens.length}</span>
+                        ) : null}
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="font-display tnum font-extrabold text-brand">

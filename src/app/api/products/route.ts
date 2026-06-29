@@ -46,6 +46,11 @@ export async function POST(req: Request) {
       img: b.img || "",
       // İleride Sedna eşlemesi için opsiyonel; şimdi boşsa yazılmaz.
       ...(b.code ? { code: String(b.code) } : {}),
+      // Yönetmelik şeffaflık alanları.
+      kcal: Number(b.kcal) || 0,
+      allergens: Array.isArray(b.allergens) ? b.allergens.map(String) : [],
+      meat: b.meat ? String(b.meat) : "Yok",
+      content: b.content ? String(b.content).trim() : "",
     };
 
     await db.collection("products").insertOne({ ...doc, restaurant_id: RID });

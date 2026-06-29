@@ -72,7 +72,7 @@ export function PosApp() {
   const [products, setProducts] = useState<Product[]>(() => [...PRODUCTS]);
   const [cats, setCats] = useState<Category[]>(() => [...CATS]);
 
-  // Stok (eski demo Envanter tablosu) + reçeteler (Sedna malzemeli, DB'den).
+  // Stok tablosu + reçeteler (Sedna malzemeli, DB'den).
   const [stock, setStock] = useState<StockItem[]>(STOCK);
   const [recipes, setRecipesState] = useState<Record<string, RecipeLine[]>>({});
   // Reçetelerde geçen Sedna kodlarının güncel birim maliyeti (canlı maliyet).
@@ -182,7 +182,17 @@ export function PosApp() {
   // ---- Ürün CRUD (Menü Yönetimi). Her değişiklik DB'ye yazılır ve hem React
   // state'i hem modül dizileri güncellenir; böylece "Menü", adisyon ve reçeteler
   // anında yeni veriyle çalışır. ----
-  type ProductDraft = { name: string; cat: string; price: number; route: Product["route"]; img?: string };
+  type ProductDraft = {
+    name: string;
+    cat: string;
+    price: number;
+    route: Product["route"];
+    img?: string;
+    kcal?: number;
+    allergens?: string[];
+    meat?: string;
+    content?: string;
+  };
 
   const addProduct = async (d: ProductDraft) => {
     const created = await createProduct(d);

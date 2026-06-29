@@ -51,7 +51,7 @@ export function Stok({
   sednaCosts: SednaCostMap;
 }) {
   const { canEdit } = usePerms();
-  const [tab, setTab] = useState<"envanter" | "recete">("envanter");
+  const [tab, setTab] = useState<"stok" | "recete">("stok");
   const [stockInOpen, setStockInOpen] = useState(false);
 
   return (
@@ -61,7 +61,7 @@ export function Stok({
         icon={Boxes}
         sub={stock.length + " kalem · " + Object.keys(recipes).length + " reçete"}
         right={
-          tab === "envanter" ? (
+          tab === "stok" ? (
             <PrimaryButton
               icon={Plus}
               onClick={() => canEdit && setStockInOpen(true)}
@@ -84,10 +84,10 @@ export function Stok({
       )}
 
       <div className="mb-4 flex items-center gap-2 px-7">
-        <Tab on={tab === "envanter"} onClick={() => setTab("envanter")}>
+        <Tab on={tab === "stok"} onClick={() => setTab("stok")}>
           <span className="inline-flex items-center gap-1.5">
             <Package className="h-4 w-4" strokeWidth={2.1} />
-            Envanter
+            Stok
           </span>
         </Tab>
         <Tab on={tab === "recete"} onClick={() => setTab("recete")}>
@@ -98,8 +98,8 @@ export function Stok({
         </Tab>
       </div>
 
-      {tab === "envanter" ? (
-        <Envanter stock={stock} />
+      {tab === "stok" ? (
+        <StokTablosu stock={stock} />
       ) : (
         <Receteler
           recipes={recipes}
@@ -114,9 +114,9 @@ export function Stok({
 }
 
 /* ============================================================
-   Envanter — stok kalemleri tablosu
+   Stok — stok kalemleri tablosu
    ============================================================ */
-function Envanter({ stock }: { stock: StockItem[] }) {
+function StokTablosu({ stock }: { stock: StockItem[] }) {
   const [cat, setCat] = useState("hepsi");
   const list = stock.filter((s) => (cat === "hepsi" ? true : s.cat === cat));
   const low = stock.filter(isLow);
@@ -125,7 +125,7 @@ function Envanter({ stock }: { stock: StockItem[] }) {
   return (
     <>
       <div className="mb-4 grid grid-cols-4 gap-4 px-7">
-        <Stat icon={Wallet} label="Envanter Değeri" value={TL(toplamDeger)} tone="orange" />
+        <Stat icon={Wallet} label="Stok Değeri" value={TL(toplamDeger)} tone="orange" />
         <Stat icon={Package} label="Toplam Kalem" value={stock.length + ""} tone="sky" />
         <Stat icon={AlertTriangle} label="Kritik Stok" value={low.length + " kalem"} tone="rose" />
         <Stat icon={PackageCheck} label="Yeterli Stok" value={stock.length - low.length + " kalem"} tone="green" />

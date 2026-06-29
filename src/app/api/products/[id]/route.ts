@@ -30,6 +30,12 @@ export async function PUT(
     if (b.grad !== undefined) set.grad = b.grad;
     if (b.img !== undefined) set.img = b.img;
     if (b.code !== undefined) set.code = b.code ? String(b.code) : "";
+    // Yönetmelik şeffaflık alanları.
+    if (b.kcal !== undefined) set.kcal = Number(b.kcal) || 0;
+    if (b.allergens !== undefined)
+      set.allergens = Array.isArray(b.allergens) ? b.allergens.map(String) : [];
+    if (b.meat !== undefined) set.meat = b.meat ? String(b.meat) : "Yok";
+    if (b.content !== undefined) set.content = b.content ? String(b.content).trim() : "";
 
     if (Object.keys(set).length) {
       await coll.updateOne(byTenant({ id }), { $set: set });

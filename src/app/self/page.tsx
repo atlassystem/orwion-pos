@@ -6,8 +6,8 @@
    "Siparişi Gönder" → o masanın adisyonuna düşer (ödeme yok).
    ============================================================ */
 import { useEffect, useMemo, useState } from "react";
-import { UtensilsCrossed, Store, Plus, Minus, Check, ArrowLeft, Send, Loader2 } from "lucide-react";
-import { TL, KINDS, type Product, type Category, type Kind } from "@/lib/pos-data";
+import { UtensilsCrossed, Store, Plus, Minus, Check, ArrowLeft, Send, Loader2, Info, Flame, Beef, X, ShieldCheck } from "lucide-react";
+import { TL, KINDS, freeFromBadges, hasMeat, type Product, type Category, type Kind } from "@/lib/pos-data";
 import { Food } from "@/components/pos/food";
 import { catIcon } from "@/components/pos/glyphs";
 
@@ -31,6 +31,7 @@ export default function SelfOrderPage() {
   const [busy, setBusy] = useState(false);
   const [doneCount, setDoneCount] = useState<number | null>(null);
   const [err, setErr] = useState("");
+  const [detail, setDetail] = useState<Product | null>(null); // içerik/alerjen modalı
 
   // Katalog + şubeler (mount).
   useEffect(() => {
@@ -228,6 +229,15 @@ export default function SelfOrderPage() {
         </span>
       </div>
 
+      {/* Şeffaflık bandı (yönetmelik: fiyat/kalori/alerjen bilgisi) */}
+      <div className="mb-4 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-2.5 text-[12px] font-semibold text-emerald-800">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.4} />
+        <span>
+          Tüm fiyatlar KDV dahildir. Ürün kartlarındaki <b>kalori</b>, <b>alerjen</b> ve
+          <b> et türü</b> bilgileri yönetmelik gereği belirtilmiştir. Ayrıntı için ürüne dokunun.
+        </span>
+      </div>
+
       {/* Tür filtresi */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {[{ id: "hepsi", label: "Tümü" }, ...KINDS].map((k) => (
@@ -261,10 +271,37 @@ export default function SelfOrderPage() {
                   const q = cart[p.id] ?? 0;
                   return (
                     <div key={p.id} className="flex items-center gap-3 rounded-2xl border border-line bg-white p-3 shadow-sm">
-                      <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-16 w-16 shrink-0 rounded-xl" />
+                      <button onClick={() => setDetail(p)} className="shrink-0" aria-label="Ürün detayı">
+                        <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-16 w-16 rounded-xl" />
+                      </button>
                       <div className="min-w-0 flex-1">
-                        <div className="line-clamp-1 text-sm font-bold text-ink">{p.name}</div>
+                        <button
+                          onClick={() => setDetail(p)}
+                          className="flex items-center gap-1 text-left"
+                        >
+                          <span className="line-clamp-1 text-sm font-bold text-ink">{p.name}</span>
+                          <Info className="h-3.5 w-3.5 shrink-0 text-ink3" strokeWidth={2.2} />
+                        </button>
                         <div className="font-display tnum font-extrabold text-brand">{TL(p.price)}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                          {p.kcal ? (
+                            <span className="inline-flex items-center gap-0.5 rounded-md bg-surface2 px-1.5 py-0.5 text-[10.5px] font-bold text-ink2">
+                              <Flame className="h-3 w-3" strokeWidth={2.4} />
+                              {p.kcal} kcal
+                            </span>
+                          ) : null}
+                          {hasMeat(p) ? (
+                            <span className="inline-flex items-center gap-0.5 rounded-md bg-rose-50 px-1.5 py-0.5 text-[10.5px] font-bold text-rose-600">
+                              <Beef className="h-3 w-3" strokeWidth={2.4} />
+                              {p.meat}
+                            </span>
+                          ) : null}
+                          {freeFromBadges(p).map((b) => (
+                            <span key={b} className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-bold text-emerald-600">
+                              {b}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                       {q === 0 ? (
                         <button
@@ -314,7 +351,128 @@ export default function SelfOrderPage() {
           {err && <p className="mx-auto mt-2 max-w-5xl text-[13px] font-semibold text-rose-600">{err}</p>}
         </div>
       )}
+
+      {/* Ürün detayı — içerik, kalori, et türü, alerjenler (yönetmelik) */}
+      {detail && (
+        <ProductDetail
+          p={detail}
+          inCart={cart[detail.id] ?? 0}
+          onAdd={() => add(detail.id)}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </Shell>
+  );
+}
+
+/* Ürün detay modalı — yönetmelik şeffaflık bilgisi. */
+function ProductDetail({
+  p,
+  inCart,
+  onAdd,
+  onClose,
+}: {
+  p: Product;
+  inCart: number;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  const free = freeFromBadges(p);
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-end bg-ink/40 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <div className="pop flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+        <div className="relative">
+          <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-40 w-full" />
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-ink shadow-sm transition hover:bg-white"
+            aria-label="Kapat"
+          >
+            <X className="h-4.5 w-4.5" strokeWidth={2.4} />
+          </button>
+        </div>
+
+        <div className="scroll-light flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="font-display text-lg font-extrabold text-ink">{p.name}</h3>
+            <span className="font-display tnum shrink-0 text-lg font-extrabold text-brand">{TL(p.price)}</span>
+          </div>
+
+          {/* Kalori + et türü */}
+          <div className="flex flex-wrap gap-2">
+            {p.kcal ? (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-surface2 px-2.5 py-1 text-[12.5px] font-bold text-ink2">
+                <Flame className="h-3.5 w-3.5" strokeWidth={2.4} />
+                {p.kcal} kcal / porsiyon
+              </span>
+            ) : null}
+            {hasMeat(p) ? (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2.5 py-1 text-[12.5px] font-bold text-rose-600">
+                <Beef className="h-3.5 w-3.5" strokeWidth={2.4} />
+                Et türü: {p.meat}
+              </span>
+            ) : null}
+          </div>
+
+          {/* İçerik */}
+          {p.content ? (
+            <div>
+              <div className="mb-1 text-[11px] font-bold tracking-wide text-ink3 uppercase">İçerik</div>
+              <p className="text-[13.5px] leading-relaxed text-ink2">{p.content}</p>
+            </div>
+          ) : null}
+
+          {/* Alerjenler */}
+          <div>
+            <div className="mb-1.5 text-[11px] font-bold tracking-wide text-ink3 uppercase">Alerjen Bilgisi</div>
+            {p.allergens && p.allergens.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {p.allergens.map((a) => (
+                  <span key={a} className="rounded-lg bg-amber-100 px-2.5 py-1 text-[12.5px] font-bold text-amber-700">
+                    {a}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-ink3">Bilinen alerjen içermez.</p>
+            )}
+            {free.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {free.map((b) => (
+                  <span key={b} className="rounded-lg bg-emerald-100 px-2.5 py-1 text-[12.5px] font-bold text-emerald-700">
+                    {b}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <p className="rounded-xl bg-surface2 px-3 py-2 text-[11.5px] leading-snug text-ink3">
+            Alerjen ve içerik bilgileri yönetmelik gereği bilgilendirme amaçlıdır. Ciddi gıda
+            alerjiniz varsa lütfen personele danışın.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 border-t border-line px-5 py-3.5">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-line2 bg-white px-4 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
+          >
+            Kapat
+          </button>
+          <button
+            onClick={() => {
+              onAdd();
+              onClose();
+            }}
+            className="ml-auto inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand2"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.6} />
+            {inCart > 0 ? `Sepete ekle (${inCart})` : "Sepete ekle"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

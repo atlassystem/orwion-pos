@@ -1,11 +1,11 @@
 /* ============================================================
    Orwion POS — Yönetim modülleri demo verisi
-   (doyourorder referanslı: Envanter, İş Gücü, Sadakat, Rezervasyon)
+   (doyourorder referanslı: Stok, İş Gücü, Sadakat, Rezervasyon)
    ============================================================ */
 
 import type { OrderItem } from "./pos-data";
 
-/* ---------- Envanter / Stok ---------- */
+/* ---------- Stok ---------- */
 export interface StockItem {
   id: string;
   name: string;

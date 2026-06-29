@@ -96,6 +96,31 @@ export async function seedIfEmpty(db: Db): Promise<void> {
   ]);
 
   await ensureDefaultAdmin(db);
+  await ensureMenuInfo(db);
+}
+
+/**
+ * Yönetmelik şeffaflık alanlarını (kcal/allergens/meat/content) eski ürünlere
+ * geriye dönük doldurur (idempotent). Yalnızca `content` alanı HİÇ olmayan
+ * (yani bu özellikten önce tohumlanmış) seed ürünlerine yazar; kullanıcının
+ * sonradan düzenlediği ürünlerin değerlerini EZMEZ.
+ */
+async function ensureMenuInfo(db: Db): Promise<void> {
+  const coll = db.collection("products");
+  const ops = PRODUCTS.filter((p) => p.content !== undefined).map((p) => ({
+    updateOne: {
+      filter: byTenant({ id: p.id, content: { $exists: false } }),
+      update: {
+        $set: {
+          kcal: p.kcal ?? 0,
+          allergens: p.allergens ?? [],
+          meat: p.meat ?? "Yok",
+          content: p.content ?? "",
+        },
+      },
+    },
+  }));
+  if (ops.length) await coll.bulkWrite(ops);
 }
 
 /**
