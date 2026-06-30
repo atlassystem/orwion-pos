@@ -13,6 +13,10 @@ import {
   Soup,
   ImagePlus,
   Loader2,
+  FolderCog,
+  ChevronUp,
+  ChevronDown,
+  Store,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -23,6 +27,7 @@ import {
   MEATS,
   KDV_ORANLARI,
   KDV_ORAN_DEFAULT,
+  CATEGORY_COLORS,
   DEFAULT_PRODUCT_EMOJI,
   DEFAULT_PRODUCT_GRAD,
   type Product,
@@ -30,6 +35,7 @@ import {
   type Route,
   type Kind,
 } from "@/lib/pos-data";
+import type { Branch } from "@/lib/pos-modules";
 import { uploadProductImage } from "@/lib/pos-api";
 import { Food } from "./food";
 import { catIcon } from "./glyphs";
@@ -52,6 +58,16 @@ type Draft = {
   kdv_orani: number;
   /* EUR fiyatı (TL'den kurla hesaplanır; elle de düzenlenebilir) */
   eur_price: number;
+  /* Çoklu şube — ürünün geçerli olduğu şubeler (boş = tüm şubeler) */
+  branches: string[];
+};
+
+/** Kategori formu taslağı (ekle/düzenle). */
+export type CatDraft = {
+  name: string;
+  emoji: string;
+  color: string;
+  kind: Kind;
 };
 
 /** Görseli istemcide en fazla ~800px'e küçültüp JPEG dataURL döndürür. */
@@ -88,16 +104,26 @@ async function resizeImage(file: File, maxPx = 800, quality = 0.82): Promise<str
 export function MenuYonetim({
   products,
   cats,
+  branches,
   onCreate,
   onUpdate,
   onDelete,
+  onCatCreate,
+  onCatUpdate,
+  onCatDelete,
   eurRate,
 }: {
   products: Product[];
   cats: Category[];
+  /** Tüm şubeler (ürün ↔ şube ataması + tek/çok şube tespiti için). */
+  branches: Branch[];
   onCreate: (d: Draft) => void;
   onUpdate: (id: string, d: Draft) => void;
   onDelete: (id: string) => void;
+  onCatCreate: (d: CatDraft) => Promise<Category | null>;
+  onCatUpdate: (id: string, patch: Partial<Category>) => void;
+  /** Kategori siler; ürünü varsa false döner (silinmez). */
+  onCatDelete: (id: string) => Promise<boolean>;
   /** TCMB EUR/TRY efektif satış kuru (EUR fiyatı otomatik hesabı için). */
   eurRate?: number | null;
 }) {
@@ -105,6 +131,10 @@ export function MenuYonetim({
   const [kind, setKind] = useState<"hepsi" | Kind>("hepsi");
   // null = kapalı, "new" = ekleme, Product = düzenleme
   const [editing, setEditing] = useState<Product | "new" | null>(null);
+  // Kategori yönetimi modalı açık mı.
+  const [catMgr, setCatMgr] = useState(false);
+  // Birden çok şube varsa ürün ↔ şube seçimi gösterilir.
+  const multiBranch = branches.length > 1;
 
   const barCount = products.filter((p) => p.route === "bar").length;
 
@@ -133,9 +163,19 @@ export function MenuYonetim({
         icon={ClipboardList}
         sub={products.length + " ürün · " + cats.length + " kategori"}
         right={
-          <PrimaryButton icon={Plus} onClick={() => canEdit && setEditing("new")}>
-            Yeni Ürün
-          </PrimaryButton>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => canEdit && setCatMgr(true)}
+              disabled={!canEdit}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line2 bg-white px-3.5 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink disabled:opacity-40"
+            >
+              <FolderCog className="h-4 w-4" strokeWidth={2.2} />
+              Kategoriler
+            </button>
+            <PrimaryButton icon={Plus} onClick={() => canEdit && setEditing("new")}>
+              Yeni Ürün
+            </PrimaryButton>
+          </div>
         }
       />
 
@@ -231,9 +271,12 @@ export function MenuYonetim({
       {editing && (
         <ProductModal
           cats={cats}
+          branches={branches}
+          multiBranch={multiBranch}
           product={editing === "new" ? null : editing}
           eurRate={eurRate}
           onClose={() => setEditing(null)}
+          onCatCreate={onCatCreate}
           onSave={(d) => {
             if (editing === "new") onCreate(d);
             else onUpdate(editing.id, d);
@@ -241,6 +284,282 @@ export function MenuYonetim({
           }}
         />
       )}
+
+      {catMgr && (
+        <CategoryManager
+          cats={cats}
+          onClose={() => setCatMgr(false)}
+          onCatCreate={onCatCreate}
+          onCatUpdate={onCatUpdate}
+          onCatDelete={onCatDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   Kategori yönetimi — ekle / yeniden adlandır / sil + sıra / renk / emoji / tür
+   ============================================================ */
+function CategoryManager({
+  cats,
+  onClose,
+  onCatCreate,
+  onCatUpdate,
+  onCatDelete,
+}: {
+  cats: Category[];
+  onClose: () => void;
+  onCatCreate: (d: CatDraft) => Promise<Category | null>;
+  onCatUpdate: (id: string, patch: Partial<Category>) => void;
+  onCatDelete: (id: string) => Promise<boolean>;
+}) {
+  // Sıraya göre dizili kopya (order yoksa mevcut sıra korunur).
+  const ordered = [...cats].sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0),
+  );
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [err, setErr] = useState("");
+
+  // Yukarı/aşağı taşı: komşu iki kategorinin order'larını değiştir.
+  const move = (id: string, dir: -1 | 1) => {
+    const idx = ordered.findIndex((c) => c.id === id);
+    const j = idx + dir;
+    if (idx < 0 || j < 0 || j >= ordered.length) return;
+    const a = ordered[idx];
+    const b = ordered[j];
+    const ao = a.order ?? idx;
+    const bo = b.order ?? j;
+    onCatUpdate(a.id, { order: bo });
+    onCatUpdate(b.id, { order: ao });
+  };
+
+  const askDelete = async (c: Category) => {
+    setErr("");
+    const ok = await onCatDelete(c.id);
+    if (!ok)
+      setErr(
+        `"${c.name}" silinemedi — bu kategoride ürün var. Önce ürünleri başka kategoriye taşıyın veya silin.`,
+      );
+  };
+
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm">
+      <div className="pop flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-[1.25rem] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h3 className="flex items-center gap-2 font-display text-lg font-extrabold text-ink">
+            <FolderCog className="h-5 w-5 text-brand" strokeWidth={2.2} />
+            Kategoriler
+          </h3>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg text-ink3 transition hover:bg-surface2 hover:text-ink"
+          >
+            <X className="h-4.5 w-4.5" strokeWidth={2.2} />
+          </button>
+        </div>
+
+        <div className="scroll-light flex-1 space-y-2 overflow-y-auto px-6 py-5">
+          {err && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[12px] font-semibold text-rose-700">
+              {err}
+            </div>
+          )}
+
+          {ordered.map((c, i) =>
+            editId === c.id ? (
+              <CatRowForm
+                key={c.id}
+                initial={{ name: c.name, emoji: c.emoji, color: c.color, kind: c.kind }}
+                onCancel={() => setEditId(null)}
+                onSave={(d) => {
+                  onCatUpdate(c.id, d);
+                  setEditId(null);
+                }}
+              />
+            ) : (
+              <div
+                key={c.id}
+                className="flex items-center gap-3 rounded-xl border border-line2 bg-surface2 px-3.5 py-2.5"
+              >
+                <span
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-lg"
+                  style={{ background: c.color + "22" }}
+                >
+                  {c.emoji}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold text-ink">{c.name}</span>
+                  <span className="text-[11px] font-semibold text-ink3">
+                    {c.kind === "icecek" ? "İçecek · Bar" : "Yiyecek · Mutfak"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => move(c.id, -1)}
+                    disabled={i === 0}
+                    aria-label="Yukarı"
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-line2 bg-white text-ink3 transition hover:bg-surface2 hover:text-ink disabled:opacity-30"
+                  >
+                    <ChevronUp className="h-4 w-4" strokeWidth={2.4} />
+                  </button>
+                  <button
+                    onClick={() => move(c.id, 1)}
+                    disabled={i === ordered.length - 1}
+                    aria-label="Aşağı"
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-line2 bg-white text-ink3 transition hover:bg-surface2 hover:text-ink disabled:opacity-30"
+                  >
+                    <ChevronDown className="h-4 w-4" strokeWidth={2.4} />
+                  </button>
+                  <button
+                    onClick={() => setEditId(c.id)}
+                    aria-label="Düzenle"
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-line2 bg-white text-ink2 transition hover:bg-surface2 hover:text-ink"
+                  >
+                    <SquarePen className="h-4 w-4" strokeWidth={2.2} />
+                  </button>
+                  <button
+                    onClick={() => askDelete(c)}
+                    aria-label="Sil"
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-line2 bg-white text-ink3 transition hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                  </button>
+                </div>
+              </div>
+            ),
+          )}
+
+          {adding ? (
+            <CatRowForm
+              initial={{ name: "", emoji: "🍽️", color: CATEGORY_COLORS[2], kind: "yiyecek" }}
+              onCancel={() => setAdding(false)}
+              onSave={(d) => {
+                onCatCreate(d);
+                setAdding(false);
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => {
+                setErr("");
+                setAdding(true);
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line2 py-3 text-sm font-bold text-ink2 transition hover:border-brand/50 hover:bg-surface2 hover:text-ink"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.4} />
+              Yeni Kategori
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end border-t border-line px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2"
+          >
+            Kapat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Tek satır kategori formu — ekleme ve düzenlemede ortak. */
+function CatRowForm({
+  initial,
+  onCancel,
+  onSave,
+}: {
+  initial: CatDraft;
+  onCancel: () => void;
+  onSave: (d: CatDraft) => void;
+}) {
+  const [name, setName] = useState(initial.name);
+  const [emoji, setEmoji] = useState(initial.emoji);
+  const [color, setColor] = useState(initial.color);
+  const [kind, setKind] = useState<Kind>(initial.kind);
+  const valid = name.trim().length > 0;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-brand/40 bg-white p-3.5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <input
+          value={emoji}
+          onChange={(e) => setEmoji(e.target.value.slice(0, 2))}
+          aria-label="Emoji"
+          className="h-11 w-12 shrink-0 rounded-xl border border-line2 bg-surface2 text-center text-lg outline-none focus:border-brand/60 focus:bg-white"
+        />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Kategori adı"
+          autoFocus
+          className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3.5 text-sm font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink3 focus:border-brand/60 focus:bg-white"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {KINDS.map((k) => {
+          const on = kind === k.id;
+          return (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() => setKind(k.id)}
+              className={cn(
+                "rounded-xl border px-3 py-2 text-sm font-bold transition",
+                on
+                  ? "border-brand bg-brand text-white shadow-sm shadow-brand/30"
+                  : "border-line2 bg-surface2 text-ink2 hover:bg-white hover:text-ink",
+              )}
+            >
+              {k.label}
+              <span className={cn("ml-1.5 text-[11px] font-semibold", on ? "text-white/80" : "text-ink3")}>
+                · {k.route === "bar" ? "Bar" : "Mutfak"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div>
+        <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Renk</span>
+        <div className="flex flex-wrap gap-1.5">
+          {CATEGORY_COLORS.map((col) => (
+            <button
+              key={col}
+              type="button"
+              onClick={() => setColor(col)}
+              aria-label={col}
+              className={cn(
+                "h-7 w-7 rounded-full ring-2 ring-offset-2 transition",
+                color === col ? "ring-ink" : "ring-transparent hover:ring-line2",
+              )}
+              style={{ background: col }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="rounded-xl border border-line2 bg-white px-3.5 py-2 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
+        >
+          Vazgeç
+        </button>
+        <button
+          onClick={() => valid && onSave({ name: name.trim(), emoji: emoji || "🍽️", color, kind })}
+          disabled={!valid}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-3.5 py-2 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:opacity-40"
+        >
+          <Check className="h-4 w-4" strokeWidth={2.6} />
+          Kaydet
+        </button>
+      </div>
     </div>
   );
 }
@@ -251,14 +570,21 @@ export function MenuYonetim({
 function ProductModal({
   product,
   cats,
+  branches,
+  multiBranch,
   eurRate,
   onClose,
+  onCatCreate,
   onSave,
 }: {
   product: Product | null;
   cats: Category[];
+  branches: Branch[];
+  /** Birden çok şube var mı (şube seçici yalnızca o zaman gösterilir). */
+  multiBranch: boolean;
   eurRate?: number | null;
   onClose: () => void;
+  onCatCreate: (d: CatDraft) => Promise<Category | null>;
   onSave: (d: Draft) => void;
 }) {
   // Düzenlenen ürünün türünü kategorisinden çıkar (yoksa varsayılan yiyecek).
@@ -274,6 +600,12 @@ function ProductModal({
   const [catId, setCatId] = useState(
     product?.cat ?? catOptions[0]?.id ?? cats[0]?.id ?? "",
   );
+  // Satır içi "yeni kategori" formu açık mı.
+  const [addingCat, setAddingCat] = useState(false);
+  // Ürünün geçerli olduğu şubeler (boş = tüm şubeler). Tek şubede kullanılmaz.
+  const [branchSel, setBranchSel] = useState<string[]>(product?.branches ?? []);
+  const toggleBranch = (id: string) =>
+    setBranchSel((xs) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]));
   const [price, setPrice] = useState(product?.price ?? 0);
   // EUR fiyatı — TL fiyattan kurla hesaplanır; elle de düzenlenebilir.
   const [eurPrice, setEurPrice] = useState(
@@ -444,20 +776,31 @@ function ProductModal({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
+            <div className="block">
               <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Kategori</span>
-              <select
-                value={catId}
-                onChange={(e) => setCatId(e.target.value)}
-                className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
-              >
-                {catOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={catId}
+                  onChange={(e) => setCatId(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
+                >
+                  {catOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setAddingCat((v) => !v)}
+                  aria-label="Yeni kategori"
+                  title="Yeni kategori"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line2 bg-white text-ink2 transition hover:bg-surface2 hover:text-ink"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.4} />
+                </button>
+              </div>
+            </div>
 
             <label className="block">
               <span className="mb-1.5 block text-[12px] font-semibold text-ink2">Fiyat (₺)</span>
@@ -471,6 +814,52 @@ function ProductModal({
               />
             </label>
           </div>
+
+          {/* Satır içi yeni kategori — kaydedince otomatik seçilir */}
+          {addingCat && (
+            <CatRowForm
+              initial={{ name: "", emoji: "🍽️", color: CATEGORY_COLORS[2], kind }}
+              onCancel={() => setAddingCat(false)}
+              onSave={async (d) => {
+                const created = await onCatCreate(d);
+                setAddingCat(false);
+                if (created) {
+                  setKind(created.kind);
+                  setCatId(created.id);
+                }
+              }}
+            />
+          )}
+
+          {/* Şube seçimi — yalnızca birden çok şube varsa. Boş = tüm şubeler. */}
+          {multiBranch && (
+            <div>
+              <span className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-ink2">
+                <Store className="h-3.5 w-3.5" strokeWidth={2.2} />
+                Şubeler <span className="font-normal text-ink3">(boş bırakılırsa tüm şubelerde geçerli)</span>
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {branches.map((b) => {
+                  const on = branchSel.includes(b.id);
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => toggleBranch(b.id)}
+                      className={cn(
+                        "rounded-lg px-2.5 py-1.5 text-[12px] font-bold transition ring-1",
+                        on
+                          ? "bg-brand text-white ring-brand"
+                          : "bg-white text-ink2 ring-line2 hover:bg-surface2",
+                      )}
+                    >
+                      {b.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* EUR fiyatı — TL'den TCMB kuruyla otomatik; elle de düzenlenebilir */}
           <label className="block">
@@ -611,6 +1000,7 @@ function ProductModal({
                 content: content.trim(),
                 kdv_orani: kdvOrani,
                 eur_price: eurPrice,
+                branches: multiBranch ? branchSel : [],
               })
             }
             disabled={!valid}

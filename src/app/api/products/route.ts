@@ -55,6 +55,8 @@ export async function POST(req: Request) {
       kdv_orani: Number(b.kdv_orani) || 0,
       // EUR fiyatı (TL'den kurla hesaplanır; elle de düzenlenebilir).
       eur_price: Number(b.eur_price) || 0,
+      // Çoklu şube: ürünün geçerli olduğu şubeler (boş = TÜM şubeler).
+      branches: Array.isArray(b.branches) ? b.branches.map(String) : [],
     };
 
     await db.collection("products").insertOne({ ...doc, restaurant_id: RID });

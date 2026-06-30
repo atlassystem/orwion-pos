@@ -24,7 +24,15 @@ export interface Category {
   color: string;
   /** Tür — yiyecek mi içecek mi. Tür seçici, gruplama ve route bundan türetilir. */
   kind: Kind;
+  /** Menüde gösterim sırası (küçük önce). Tanımsızsa dizilim/eklenme sırası kullanılır. */
+  order?: number;
 }
+
+/** Kategori renk paleti — mevcut tema renkleri (rastgele renk yok, arayüzle uyumlu). */
+export const CATEGORY_COLORS = [
+  "#3a7d44", "#c9742b", "#c0492f", "#b5642a", "#d96b2a", "#8a5fb0",
+  "#2a6f97", "#4fa3c7", "#5b3a29", "#8a5a3c", "#9c1330", "#6C091E",
+] as const;
 
 /** Tür seçenekleri (sıra önemli — UI bu sırayı kullanır). */
 export const KINDS: { id: Kind; label: string; route: Route }[] = [
@@ -66,7 +74,16 @@ export interface Product {
   /** Ürünün EUR fiyatı. TL fiyattan TCMB efektif satış kuruyla otomatik
    *  hesaplanır (kur bölme); elle de düzenlenebilir (girilen değer korunur). */
   eur_price?: number;
+
+  /* ---- Çoklu şube ---- */
+  /** Ürünün geçerli olduğu şube id'leri. Boş/tanımsız = TÜM şubeler.
+   *  Tek şubeli kurulumda kullanılmaz (her şey tek şubeye sayılır). */
+  branches?: string[];
 }
+
+/** Bir ürün, verilen şubede görünür mü? Boş/tanımsız branches = tüm şubeler. */
+export const productInBranch = (p: { branches?: string[] }, branchId: string): boolean =>
+  !p.branches || p.branches.length === 0 || p.branches.includes(branchId);
 
 /** Yönetmelik gereği belirtilebilecek alerjen listesi (üründe BULUNANLAR seçilir). */
 export const ALLERGENS = [

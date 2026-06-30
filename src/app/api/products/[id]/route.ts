@@ -40,6 +40,9 @@ export async function PUT(
     if (b.kdv_orani !== undefined) set.kdv_orani = Number(b.kdv_orani) || 0;
     // EUR fiyatı (TL'den kurla hesaplanır; elle de düzenlenebilir).
     if (b.eur_price !== undefined) set.eur_price = Number(b.eur_price) || 0;
+    // Çoklu şube: geçerli şubeler (boş = TÜM şubeler).
+    if (b.branches !== undefined)
+      set.branches = Array.isArray(b.branches) ? b.branches.map(String) : [];
 
     if (Object.keys(set).length) {
       await coll.updateOne(byTenant({ id }), { $set: set });

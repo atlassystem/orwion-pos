@@ -79,9 +79,13 @@ export async function seedIfEmpty(db: Db): Promise<void> {
     seedTables().map((t) => ({ ...t, branch_id: b.id })),
   );
 
+  // MENÜ (kategori + ürün) YALNIZCA ilk kurulumda tohumlanır. Bir kez işaretlendikten
+  // sonra kullanıcı menüyü boşaltsa BİLE demo GERİ GELMEZ (gerçek menü modu).
+  const menuFlag = await db.collection("meta").findOne(byTenant({ key: "menu_init" }));
+  const menuInit = !!(menuFlag as { done?: boolean } | null)?.done;
+
   await Promise.all([
-    seedColl("categories", CATS),
-    seedColl("products", PRODUCTS),
+    ...(menuInit ? [] : [seedColl("categories", CATS), seedColl("products", PRODUCTS)]),
     seedColl("halls", HALLS),
     seedColl("tables", branchTables),
     seedColl("stock", STOCK),
@@ -94,6 +98,13 @@ export async function seedIfEmpty(db: Db): Promise<void> {
       Object.entries(LEVELS).map(([id, v]) => ({ id, ...v })),
     ),
   ]);
+
+  // Menü bir kez kuruldu → işaretle. Bundan sonra boşalsa bile yeniden tohumlanmaz.
+  await db.collection("meta").updateOne(
+    byTenant({ key: "menu_init" }),
+    { $set: { done: true, at: new Date().toISOString() } },
+    { upsert: true },
+  );
 
   await ensureDefaultAdmin(db);
   await ensureMenuInfo(db);

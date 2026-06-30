@@ -4,6 +4,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
   seedTables,
   hydrateMenu,
+  productInBranch,
   PRODUCTS,
   CATS,
   type Table,
@@ -35,10 +36,14 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  createCategory,
+  updateCategory,
+  deleteCategory,
   fetchEurRate,
   meApi,
   logoutApi,
 } from "@/lib/pos-api";
+import type { CatDraft } from "./menu-yonetim";
 import { Sidebar, type View } from "./sidebar";
 import { PermsProvider, ReadOnlyBanner } from "./perms";
 import { Masalar } from "./masalar";
@@ -210,6 +215,7 @@ export function PosApp() {
     content?: string;
     kdv_orani?: number;
     eur_price?: number;
+    branches?: string[];
   };
 
   const addProduct = async (d: ProductDraft) => {
@@ -241,6 +247,35 @@ export function PosApp() {
       delete n[id];
       return n;
     });
+  };
+
+  // ---- Kategori CRUD (Menü Yönetimi). DB'ye yazılır; cats state + modül
+  // dizileri (CATS) güncellenir. ----
+  const addCategory = async (d: CatDraft): Promise<Category | null> => {
+    const created = await createCategory(d);
+    if (!created) return null;
+    const next = [...cats, created];
+    setCats(next);
+    hydrateMenu(undefined, next);
+    return created;
+  };
+
+  const editCategory = async (id: string, patch: Partial<Category>) => {
+    const ok = await updateCategory(id, patch);
+    if (!ok) return;
+    const next = cats.map((c) => (c.id === id ? { ...c, ...patch } : c));
+    setCats(next);
+    hydrateMenu(undefined, next);
+  };
+
+  // Kategori sil: ürünü varsa sunucu 409 → false döner (silinmez).
+  const removeCategory = async (id: string): Promise<boolean> => {
+    const r = await deleteCategory(id);
+    if (!r.ok) return false;
+    const next = cats.filter((c) => c.id !== id);
+    setCats(next);
+    hydrateMenu(undefined, next);
+    return true;
   };
 
   // Masayı güncelle + kalıcı kaydet (yeni durumu sunucuya yaz).
@@ -322,6 +357,10 @@ export function PosApp() {
     setAuthUser(null);
   };
 
+  // Sipariş/menü görünümlerinde yalnızca aktif şubede geçerli ürünler. Şubesiz
+  // (branches boş) ürünler tüm şubelerde görünür → tek şubeli kurulumda hepsi.
+  const branchProducts = products.filter((p) => productInBranch(p, activeBranch));
+
   const openTableObj = tables.find((t) => t.no === openNo);
   // Masa Planı ve Garson Terminali, açık masada ortak Adisyon ekranını paylaşır.
   const inAdisyon = openTableObj && (view === "masalar" || view === "garson");
@@ -363,7 +402,7 @@ export function PosApp() {
               askBill={askBill}
               payTable={payTable}
               clockMin={clockMin}
-              products={products}
+              products={branchProducts}
               cats={cats}
               eurRate={eurRate}
             />
@@ -382,14 +421,18 @@ export function PosApp() {
           )}
           {view === "mutfak" && <Mutfak tables={tables} clockMin={clockMin} />}
           {view === "siramatik" && <Siramatik />}
-          {view === "menu" && <Menu products={products} cats={cats} />}
+          {view === "menu" && <Menu products={branchProducts} cats={cats} />}
           {view === "menu_yonetim" && (
             <MenuYonetim
               products={products}
               cats={cats}
+              branches={branches}
               onCreate={addProduct}
               onUpdate={editProduct}
               onDelete={removeProduct}
+              onCatCreate={addCategory}
+              onCatUpdate={editCategory}
+              onCatDelete={removeCategory}
               eurRate={eurRate}
             />
           )}

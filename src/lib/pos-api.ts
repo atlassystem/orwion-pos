@@ -206,6 +206,36 @@ export async function deleteProduct(id: string): Promise<boolean> {
   return res.ok;
 }
 
+/* ---------- Kategori CRUD (Menü Yönetimi) ---------- */
+type CategoryInput = Partial<Omit<Category, "id">> & { name: string };
+
+/** Yeni kategori ekler; sunucudan id'li tam kategoriyi döndürür. */
+export async function createCategory(input: CategoryInput): Promise<Category | null> {
+  const res = await fetch("/api/categories", json("POST", input));
+  if (!res.ok) return null;
+  const d = await res.json();
+  return d.category ?? null;
+}
+
+/** Kategoriyi düzenler (ad/sıra/renk/emoji/tür). */
+export async function updateCategory(
+  id: string,
+  patch: Partial<Category>,
+): Promise<boolean> {
+  const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, json("PUT", patch));
+  return res.ok;
+}
+
+/** Kategoriyi siler. Ürünü olan kategori silinemez (sunucu 409 döner). */
+export async function deleteCategory(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, json("DELETE"));
+  if (res.ok) return { ok: true };
+  const d = await res.json().catch(() => ({}));
+  return { ok: false, error: d.error };
+}
+
 /** Ürün fotoğrafını (küçültülmüş dataURL) sunucuya yükler; kalıcı URL döner. */
 export async function uploadProductImage(dataUrl: string): Promise<string | null> {
   const res = await fetch("/api/upload", json("POST", { dataUrl }));
