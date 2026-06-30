@@ -227,4 +227,62 @@ export async function saveStaff(list: Staff[]): Promise<void> {
   await fetch("/api/staff", json("PUT", list));
 }
 
-/** Personeli siler (ki
+/** Personeli siler (kimlik bilgileri de belge ile birlikte gider). */
+export async function deleteStaff(id: string): Promise<boolean> {
+  const res = await fetch(`/api/staff/${encodeURIComponent(id)}`, json("DELETE"));
+  return res.ok;
+}
+
+/* ---------- Kimlik doğrulama (auth) ---------- */
+export interface AuthResult {
+  ok: boolean;
+  user?: Staff;
+  branch?: string;
+  status: number;
+}
+
+/** Giriş: branch + username + password → oturum çerezi + kullanıcı. */
+export async function loginApi(
+  branch: string,
+  username: string,
+  password: string,
+): Promise<AuthResult> {
+  const res = await fetch("/api/auth/login", json("POST", { branch, username, password }));
+  const d = await res.json().catch(() => ({}));
+  return { ok: res.ok && d.ok, user: d.user, branch: d.branch, status: res.status };
+}
+
+/** Aktif oturum kullanıcısı (çerezden). Yoksa null. */
+export async function meApi(): Promise<{ user: Staff; branch: string } | null> {
+  const res = await fetch("/api/auth/me", { cache: "no-store" });
+  if (!res.ok) return null;
+  const d = await res.json();
+  return d.user ? { user: d.user, branch: d.branch } : null;
+}
+
+/** Oturumu kapat (çerezi temizler). */
+export async function logoutApi(): Promise<void> {
+  await fetch("/api/auth/logout", json("POST"));
+}
+
+/** Admin: bir personele kullanıcı adı + şifre belirler/sıfırlar. */
+export async function setStaffCredentials(
+  id: string,
+  username: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(
+    `/api/staff/${encodeURIComponent(id)}/credentials`,
+    json("POST", { username, password }),
+  );
+  const d = await res.json().catch(() => ({}));
+  return { ok: res.ok && d.ok, error: d.error };
+}
+
+/** Stok kalemini yeni mutlak miktara günceller. */
+export async function saveStockQty(id: string, qty: number): Promise<StockItem | null> {
+  const res = await fetch(`/api/stock/${encodeURIComponent(id)}`, json("PUT", { qty }));
+  if (!res.ok) return null;
+  const d = await res.json();
+  return d.item ?? null;
+}

@@ -307,4 +307,37 @@ export function minutesSince(
   return Math.max(0, Math.round(clockMin - startedAt));
 }
 
-/* ------
+/* ---------- Durum stilleri (beyaz kart üstü) ---------- */
+export const STATUS: Record<
+  TableStatus,
+  { label: string; dot: string; ring: string; soft: string; chip: string }
+> = {
+  bos: {
+    label: "Boş",
+    dot: "#94a3b8",
+    ring: "border-slate-200",
+    soft: "bg-slate-50",
+    chip: "bg-slate-100 text-slate-500",
+  },
+  dolu: {
+    label: "Dolu",
+    dot: "#10b981",
+    ring: "border-emerald-300",
+    soft: "bg-emerald-50",
+    chip: "bg-emerald-100 text-emerald-700",
+  },
+  hesap: {
+    label: "Hesap İstendi",
+    dot: "#f59e0b",
+    ring: "border-amber-300",
+    soft: "bg-amber-50",
+    chip: "bg-amber-100 text-amber-700",
+  },
+  rezerve: {
+    label: "Rezerve",
+    dot: "#8b5cf6",
+    ring: "border-violet-300",
+    soft: "bg-violet-50",
+    chip: "bg-violet-100 text-violet-700",
+  },
+};

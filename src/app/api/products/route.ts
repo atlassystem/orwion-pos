@@ -57,4 +57,8 @@ export async function POST(req: Request) {
 
     await db.collection("products").insertOne({ ...doc, restaurant_id: RID });
     return Response.json({ ok: true, product: doc });
-  } catch (
+  } catch (err) {
+    console.error("[products POST] hata:", err);
+    return Response.json({ ok: false, error: "save_failed" }, { status: 500 });
+  }
+}

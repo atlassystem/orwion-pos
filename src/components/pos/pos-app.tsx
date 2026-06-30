@@ -391,4 +391,21 @@ export function PosApp() {
               staff={staff}
               setStaff={setStaff}
               onDelete={removeStaff}
-              canMa
+              canManage={authUser.level === "admin"}
+            />
+          )}
+          {view === "rapor" && (
+            <Rapor
+              branchId={activeBranch}
+              branchName={
+                branches.find((b) => b.id === activeBranch)?.name ?? activeBranch
+              }
+            />
+          )}
+          {view === "subeler" && <Subeler />}
+          {view === "ayarlar" && <Ayarlar />}
+        </main>
+      </div>
+    </PermsProvider>
+  );
+}

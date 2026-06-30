@@ -533,4 +533,44 @@ function ProductModal({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={2}
-                placeholder="Ö
+                placeholder="Örn. Elde kıyılmış kuzu eti, kuyruk yağı, acı biber; közde pişirilir."
+                className="w-full resize-none rounded-xl border border-line2 bg-white px-3.5 py-2.5 text-sm font-semibold text-ink outline-none transition placeholder:font-normal placeholder:text-ink3 focus:border-brand/60"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-line2 bg-white px-4 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
+          >
+            Vazgeç
+          </button>
+          <button
+            onClick={() =>
+              valid &&
+              onSave({
+                name: name.trim(),
+                cat: catId,
+                price,
+                route,
+                img,
+                kcal,
+                allergens,
+                meat,
+                content: content.trim(),
+                kdv_orani: kdvOrani,
+              })
+            }
+            disabled={!valid}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Check className="h-4 w-4" strokeWidth={2.6} />
+            {product ? "Kaydet" : "Ürünü Ekle"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -8,6 +8,7 @@
      byMethod: [{ method, count, amount }],                     // tutara göre azalan
    } */
 import { getDb, byTenant, DEFAULT_BRANCH } from "@/lib/server/repo";
+import { KDV_ORAN_DEFAULT } from "@/lib/pos-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,13 @@ interface OrderLine {
   costTotal?: number;
 }
 
+interface VatRow {
+  rate?: number;
+  base?: number;
+  kdv?: number;
+  total?: number;
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -54,7 +62,18 @@ export async function GET(req: Request) {
     const orders = await db
       .collection("orders")
       .find(byTenant({ branch_id: branch, paidAt: { $gte: start, $lt: end } }), {
-        projection: { _id: 0, total: 1, costTotal: 1, method: 1, paidAt: 1, items: 1 },
+        projection: {
+          _id: 0,
+          total: 1,
+          subtotal: 1,
+          kdv: 1,
+          costTotal: 1,
+          method: 1,
+          paidAt: 1,
+          items: 1,
+          vatBreakdown: 1,
+          fiscal: 1,
+        },
       })
       .toArray();
 
@@ -76,6 +95,12 @@ export async function GET(req: Request) {
     >();
     // ---- Ödeme türü kırılımı ----
     const methodMap = new Map<string, { method: string; count: number; amount: number }>();
+    // ---- Mali fiş: KDV kırılımı (orana göre) + fiş durumu sayısı ----
+    const vatMap = new Map<
+      number,
+      { rate: number; base: number; kdv: number; total: number }
+    >();
+    const fiscalMap = new Map<string, number>();
 
     for (const o of orders) {
       const day = o.paidAt instanceof Date ? localDay(o.paidAt) : localDay(new Date(o.paidAt));
@@ -101,6 +126,35 @@ export async function GET(req: Request) {
         pRow.cost += Number(it.costTotal) || 0;
         prodMap.set(pid, pRow);
       }
+
+      // KDV kırılımı: order'da vatBreakdown varsa onu topla; yoksa (ÖKC öncesi
+      // eski kayıt) tek satır olarak varsayılan orandan türet.
+      const ot = Number(o.total) || 0;
+      const okdv = Number(o.kdv) || 0;
+      const vb: VatRow[] =
+        Array.isArray(o.vatBreakdown) && o.vatBreakdown.length
+          ? (o.vatBreakdown as VatRow[])
+          : [
+              {
+                rate: KDV_ORAN_DEFAULT,
+                base: Number(o.subtotal) || ot - okdv,
+                kdv: okdv,
+                total: ot,
+              },
+            ];
+      for (const v of vb) {
+        const rate = Number(v.rate) || KDV_ORAN_DEFAULT;
+        const vRow = vatMap.get(rate) ?? { rate, base: 0, kdv: 0, total: 0 };
+        vRow.base += Number(v.base) || 0;
+        vRow.kdv += Number(v.kdv) || 0;
+        vRow.total += Number(v.total) || 0;
+        vatMap.set(rate, vRow);
+      }
+
+      // Mali fiş durumu — alan yoksa (eski kayıt) "beklemede" say.
+      const fst =
+        (o.fiscal && (o.fiscal as { status?: string }).status) || "beklemede";
+      fiscalMap.set(fst, (fiscalMap.get(fst) ?? 0) + 1);
     }
 
     const byDay = [...dayMap.values()]
@@ -128,6 +182,14 @@ export async function GET(req: Request) {
       .map((m) => ({ method: m.method, count: m.count, amount: r2(m.amount) }))
       .sort((a, b) => b.amount - a.amount);
 
+    // Mali fiş KDV kırılımı (orana göre artan) ve fiş durumu sayısı.
+    const vat = [...vatMap.values()]
+      .map((v) => ({ rate: v.rate, base: r2(v.base), kdv: r2(v.kdv), total: r2(v.total) }))
+      .sort((a, b) => a.rate - b.rate);
+    const fiscal = [...fiscalMap.entries()]
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count);
+
     return Response.json({
       ok: true,
       from,
@@ -137,6 +199,9 @@ export async function GET(req: Request) {
       byDay,
       byProduct,
       byMethod,
+      // ÖKC / mali fiş özeti.
+      vat,
+      fiscal,
     });
   } catch (err) {
     console.error("[report sales] hata:", err);
