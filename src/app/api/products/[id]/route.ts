@@ -60,4 +60,11 @@ export async function DELETE(
     const { id } = await params;
     const db = await getDb();
     await db.collection("products").deleteOne(byTenant({ id }));
-    // Sahipsiz reç
+    // Sahipsiz reçete kalmasın: ürün silinince reçetesi de temizlenir.
+    await db.collection("recipes").deleteOne(byTenant({ pid: id }));
+    return Response.json({ ok: true });
+  } catch (err) {
+    console.error("[products DELETE] hata:", err);
+    return Response.json({ ok: false, error: "delete_failed" }, { status: 500 });
+  }
+}

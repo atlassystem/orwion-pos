@@ -121,4 +121,54 @@ export async function POST(
         total,
         // Maliyet & kâr snapshot'ı (rapor ekranı bu fazda yok; yalnızca veri yazılır).
         costTotal,
-        
+        profit: r2(total - costTotal),
+        method,
+        paidAt,
+        // ---- ÖKC / mali fiş (HAZIRLIK) ----
+        // KDV kırılımı (orana göre matrah/KDV/tutar) — fiş bundan üretilir.
+        vatBreakdown,
+        // Mali fiş durumu. "beklemede" = henüz ÖKC'ye iletilmedi (bayrak kapalı/
+        // cihaz yok). OKC köprüsü bağlandığında receiptNo/ecrSerial/zNo/sentAt dolar.
+        fiscal: {
+          status: "beklemede",
+          receiptNo: null,
+          ecrSerial: null,
+          zNo: null,
+          sentAt: null,
+        },
+      };
+      const { insertedId } = await db.collection("orders").insertOne(orderDoc);
+
+      await db.collection("payments").insertOne({
+        restaurant_id: RID,
+        branch_id,
+        orderId: insertedId,
+        tableNo: no,
+        amount: total,
+        method,
+        paidAt,
+      });
+
+      // NOT: Sedna malzemesinde miktar/stok takibi yoktur → stok düşümü yapılmaz.
+    }
+
+    // Masayı sıfırla.
+    const reset = {
+      status: "bos",
+      items: [],
+      startedAt: null,
+      waiter: null,
+    };
+    await db.collection("tables").updateOne(byTenant({ no, branch_id }), { $set: reset });
+
+    const [freshTable, stock] = await Promise.all([
+      db.collection("tables").findOne(byTenant({ no, branch_id }), { projection: PUBLIC_PROJ }),
+      db.collection("stock").find(byTenant(), { projection: PUBLIC_PROJ }).toArray(),
+    ]);
+
+    return Response.json({ ok: true, table: freshTable, stock });
+  } catch (err) {
+    console.error("[pay POST] hata:", err);
+    return Response.json({ ok: false, error: "pay_failed" }, { status: 500 });
+  }
+}

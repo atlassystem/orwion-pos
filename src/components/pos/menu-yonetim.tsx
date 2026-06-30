@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ClipboardList,
   Plus,
@@ -50,6 +50,8 @@ type Draft = {
   content: string;
   /* ÖKC / mali fiş — KDV oranı (yüzde) */
   kdv_orani: number;
+  /* EUR fiyatı (TL'den kurla hesaplanır; elle de düzenlenebilir) */
+  eur_price: number;
 };
 
 /** Görseli istemcide en fazla ~800px'e küçültüp JPEG dataURL döndürür. */
@@ -89,12 +91,15 @@ export function MenuYonetim({
   onCreate,
   onUpdate,
   onDelete,
+  eurRate,
 }: {
   products: Product[];
   cats: Category[];
   onCreate: (d: Draft) => void;
   onUpdate: (id: string, d: Draft) => void;
   onDelete: (id: string) => void;
+  /** TCMB EUR/TRY efektif satış kuru (EUR fiyatı otomatik hesabı için). */
+  eurRate?: number | null;
 }) {
   const { canEdit } = usePerms();
   const [kind, setKind] = useState<"hepsi" | Kind>("hepsi");
@@ -227,6 +232,7 @@ export function MenuYonetim({
         <ProductModal
           cats={cats}
           product={editing === "new" ? null : editing}
+          eurRate={eurRate}
           onClose={() => setEditing(null)}
           onSave={(d) => {
             if (editing === "new") onCreate(d);
@@ -245,11 +251,13 @@ export function MenuYonetim({
 function ProductModal({
   product,
   cats,
+  eurRate,
   onClose,
   onSave,
 }: {
   product: Product | null;
   cats: Category[];
+  eurRate?: number | null;
   onClose: () => void;
   onSave: (d: Draft) => void;
 }) {
@@ -267,6 +275,24 @@ function ProductModal({
     product?.cat ?? catOptions[0]?.id ?? cats[0]?.id ?? "",
   );
   const [price, setPrice] = useState(product?.price ?? 0);
+  // EUR fiyatı — TL fiyattan kurla hesaplanır; elle de düzenlenebilir.
+  const [eurPrice, setEurPrice] = useState(
+    product?.eur_price && product.eur_price > 0 ? product.eur_price : 0,
+  );
+  // TL fiyatı değişince EUR'yu kura göre yeniden hesapla (kur varsa).
+  const onChangeTL = (v: number) => {
+    setPrice(v);
+    if (eurRate && eurRate > 0) {
+      setEurPrice(Math.round((v / eurRate) * 100) / 100);
+    }
+  };
+  // Kur sonradan geldiğinde, EUR henüz boş ama TL doluysa otomatik doldur.
+  useEffect(() => {
+    if (eurRate && eurRate > 0 && !eurPrice && price > 0) {
+      setEurPrice(Math.round((price / eurRate) * 100) / 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eurRate]);
   // ÖKC / mali fiş — ürüne özel KDV oranı (yüzde). 0/boş ise varsayılan oran.
   const [kdvOrani, setKdvOrani] = useState(
     product?.kdv_orani && product.kdv_orani > 0 ? product.kdv_orani : KDV_ORAN_DEFAULT,
@@ -440,11 +466,34 @@ function ProductModal({
                 step="1"
                 min="0"
                 value={price}
-                onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                onChange={(e) => onChangeTL(parseFloat(e.target.value) || 0)}
                 className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3.5 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
               />
             </label>
           </div>
+
+          {/* EUR fiyatı — TL'den TCMB kuruyla otomatik; elle de düzenlenebilir */}
+          <label className="block">
+            <span className="mb-1.5 flex items-center justify-between text-[12px] font-semibold text-ink2">
+              <span>EUR Fiyatı (€)</span>
+              <span className="font-normal text-ink3">
+                {eurRate && eurRate > 0
+                  ? `TCMB efektif satış: ${eurRate.toFixed(4)} ₺`
+                  : "kur alınamadı"}
+              </span>
+            </span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={eurPrice}
+              onChange={(e) => setEurPrice(parseFloat(e.target.value) || 0)}
+              className="h-11 w-full rounded-xl border border-line2 bg-surface2 px-3.5 text-sm font-semibold text-ink outline-none transition focus:border-brand/60 focus:bg-white"
+            />
+            <span className="mt-1 block text-[11px] text-ink3">
+              TL fiyatı girince kura göre otomatik hesaplanır; elle de düzenleyebilirsiniz.
+            </span>
+          </label>
 
           {/* KDV oranı — mali fiş (ÖKC) KDV kırılımı bundan üretilir */}
           <label className="block">
@@ -533,4 +582,45 @@ function ProductModal({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={2}
-                placeholder="Ö
+                placeholder="Örn. Elde kıyılmış kuzu eti, kuyruk yağı, acı biber; közde pişirilir."
+                className="w-full resize-none rounded-xl border border-line2 bg-white px-3.5 py-2.5 text-sm font-semibold text-ink outline-none transition placeholder:font-normal placeholder:text-ink3 focus:border-brand/60"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-line2 bg-white px-4 py-2.5 text-sm font-bold text-ink2 transition hover:bg-surface2 hover:text-ink"
+          >
+            Vazgeç
+          </button>
+          <button
+            onClick={() =>
+              valid &&
+              onSave({
+                name: name.trim(),
+                cat: catId,
+                price,
+                route,
+                img,
+                kcal,
+                allergens,
+                meat,
+                content: content.trim(),
+                kdv_orani: kdvOrani,
+                eur_price: eurPrice,
+              })
+            }
+            disabled={!valid}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Check className="h-4 w-4" strokeWidth={2.6} />
+            {product ? "Kaydet" : "Ürünü Ekle"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

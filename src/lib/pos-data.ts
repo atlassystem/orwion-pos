@@ -134,12 +134,6 @@ export const TL = (n: number) =>
     maximumFractionDigits: 2,
   }) + " ₺";
 export const TLk = (n: number) => (n || 0).toLocaleString("tr-TR");
-/** EUR biçimi (₺ yerine €). Ürün EUR fiyatı için. */
-export const EUR = (n: number) =>
-  (n || 0).toLocaleString("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }) + " €";
 
 /* ---------- Görsel degradeleri ---------- */
 const G = {
@@ -302,4 +296,53 @@ export const itemCount = (items: OrderItem[]) =>
   items.reduce((a, i) => a + i.qty, 0);
 
 /** Geçen süreyi "32 dk" / "1 sa 18 dk" biçiminde döndürür. */
-export function elapsed(startedAt: number | null, clockMi
+export function elapsed(startedAt: number | null, clockMin: number): string {
+  if (startedAt == null) return "";
+  const m = Math.max(0, Math.round(clockMin - startedAt));
+  if (m < 60) return m + " dk";
+  return Math.floor(m / 60) + " sa " + (m % 60) + " dk";
+}
+
+/** Mutfak kolonu için ham dakika. */
+export function minutesSince(
+  startedAt: number | null,
+  clockMin: number,
+): number {
+  if (startedAt == null) return 0;
+  return Math.max(0, Math.round(clockMin - startedAt));
+}
+
+/* ---------- Durum stilleri (beyaz kart üstü) ---------- */
+export const STATUS: Record<
+  TableStatus,
+  { label: string; dot: string; ring: string; soft: string; chip: string }
+> = {
+  bos: {
+    label: "Boş",
+    dot: "#94a3b8",
+    ring: "border-slate-200",
+    soft: "bg-slate-50",
+    chip: "bg-slate-100 text-slate-500",
+  },
+  dolu: {
+    label: "Dolu",
+    dot: "#10b981",
+    ring: "border-emerald-300",
+    soft: "bg-emerald-50",
+    chip: "bg-emerald-100 text-emerald-700",
+  },
+  hesap: {
+    label: "Hesap İstendi",
+    dot: "#f59e0b",
+    ring: "border-amber-300",
+    soft: "bg-amber-50",
+    chip: "bg-amber-100 text-amber-700",
+  },
+  rezerve: {
+    label: "Rezerve",
+    dot: "#8b5cf6",
+    ring: "border-violet-300",
+    soft: "bg-violet-50",
+    chip: "bg-violet-100 text-violet-700",
+  },
+};

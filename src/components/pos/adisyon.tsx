@@ -11,6 +11,7 @@ import {
   UserRound,
   Clock,
   ScrollText,
+  Euro,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -42,6 +43,7 @@ export function Adisyon({
   clockMin,
   products,
   cats,
+  eurRate,
 }: {
   t: Table;
   onBack: () => void;
@@ -52,6 +54,8 @@ export function Adisyon({
   clockMin: number;
   products: Product[];
   cats: Category[];
+  /** TCMB EUR/TRY efektif satış kuru (sağ üstte gösterilir). null = yok. */
+  eurRate?: number | null;
 }) {
   const { canEdit } = usePerms();
   const [cat, setCat] = useState(cats[0]?.id ?? "");
@@ -122,17 +126,34 @@ export function Adisyon({
               )}
             </p>
           </div>
-          <div className="relative ml-auto">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Ürün ara…"
-              className="h-10 w-56 rounded-xl border border-line2 bg-surface2 pr-3 pl-9 text-sm text-ink placeholder:text-ink3 outline-none transition focus:border-brand/60 focus:bg-white"
-            />
-            <Search
-              className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink3"
-              strokeWidth={2.2}
-            />
+          <div className="ml-auto flex items-center gap-3">
+            {/* TCMB EUR/TRY efektif satış kuru — küçük, sürekli görünür gösterge */}
+            {eurRate != null && (
+              <div
+                title="TCMB EUR/TRY efektif satış kuru"
+                className="flex items-center gap-1.5 rounded-xl border border-line2 bg-surface2 px-3 py-2"
+              >
+                <Euro className="h-4 w-4 text-brand" strokeWidth={2.4} />
+                <span className="font-display tnum text-sm font-extrabold text-ink">
+                  {eurRate.toFixed(4)} ₺
+                </span>
+                <span className="text-[10px] font-bold tracking-wide text-ink3 uppercase">
+                  TCMB
+                </span>
+              </div>
+            )}
+            <div className="relative">
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Ürün ara…"
+                className="h-10 w-56 rounded-xl border border-line2 bg-surface2 pr-3 pl-9 text-sm text-ink placeholder:text-ink3 outline-none transition focus:border-brand/60 focus:bg-white"
+              />
+              <Search
+                className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink3"
+                strokeWidth={2.2}
+              />
+            </div>
           </div>
         </div>
         <div className="scroll-light overflow-y-auto px-6 pb-6">

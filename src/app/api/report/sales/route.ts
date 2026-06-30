@@ -142,3 +142,69 @@ export async function GET(req: Request) {
                 total: ot,
               },
             ];
+      for (const v of vb) {
+        const rate = Number(v.rate) || KDV_ORAN_DEFAULT;
+        const vRow = vatMap.get(rate) ?? { rate, base: 0, kdv: 0, total: 0 };
+        vRow.base += Number(v.base) || 0;
+        vRow.kdv += Number(v.kdv) || 0;
+        vRow.total += Number(v.total) || 0;
+        vatMap.set(rate, vRow);
+      }
+
+      // Mali fiş durumu — alan yoksa (eski kayıt) "beklemede" say.
+      const fst =
+        (o.fiscal && (o.fiscal as { status?: string }).status) || "beklemede";
+      fiscalMap.set(fst, (fiscalMap.get(fst) ?? 0) + 1);
+    }
+
+    const byDay = [...dayMap.values()]
+      .map((d) => ({
+        date: d.date,
+        revenue: r2(d.revenue),
+        cost: r2(d.cost),
+        profit: r2(d.revenue - d.cost),
+        orderCount: d.orderCount,
+      }))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+    const byProduct = [...prodMap.values()]
+      .map((p) => ({
+        pid: p.pid,
+        name: p.name,
+        qty: p.qty,
+        revenue: r2(p.revenue),
+        cost: r2(p.cost),
+        profit: r2(p.revenue - p.cost),
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const byMethod = [...methodMap.values()]
+      .map((m) => ({ method: m.method, count: m.count, amount: r2(m.amount) }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Mali fiş KDV kırılımı (orana göre artan) ve fiş durumu sayısı.
+    const vat = [...vatMap.values()]
+      .map((v) => ({ rate: v.rate, base: r2(v.base), kdv: r2(v.kdv), total: r2(v.total) }))
+      .sort((a, b) => a.rate - b.rate);
+    const fiscal = [...fiscalMap.entries()]
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return Response.json({
+      ok: true,
+      from,
+      to,
+      branch,
+      summary: { revenue, cost, profit, margin, orderCount: orders.length },
+      byDay,
+      byProduct,
+      byMethod,
+      // ÖKC / mali fiş özeti.
+      vat,
+      fiscal,
+    });
+  } catch (err) {
+    console.error("[report sales] hata:", err);
+    return Response.json({ ok: false, error: "report_failed" }, { status: 500 });
+  }
+}

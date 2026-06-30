@@ -390,4 +390,40 @@ export function PosApp() {
               onCreate={addProduct}
               onUpdate={editProduct}
               onDelete={removeProduct}
-              eurRate={eur
+              eurRate={eurRate}
+            />
+          )}
+          {view === "stok" && (
+            <Stok
+              stock={stock}
+              recipes={recipes}
+              setRecipes={setRecipes}
+              onStockIn={stockIn}
+              products={products}
+              cats={cats}
+              sednaCosts={sednaCosts}
+            />
+          )}
+          {view === "personel" && (
+            <Personel
+              staff={staff}
+              setStaff={setStaff}
+              onDelete={removeStaff}
+              canManage={authUser.level === "admin"}
+            />
+          )}
+          {view === "rapor" && (
+            <Rapor
+              branchId={activeBranch}
+              branchName={
+                branches.find((b) => b.id === activeBranch)?.name ?? activeBranch
+              }
+            />
+          )}
+          {view === "subeler" && <Subeler />}
+          {view === "ayarlar" && <Ayarlar />}
+        </main>
+      </div>
+    </PermsProvider>
+  );
+}

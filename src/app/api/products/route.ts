@@ -57,4 +57,10 @@ export async function POST(req: Request) {
       eur_price: Number(b.eur_price) || 0,
     };
 
-    await db.collection("pr
+    await db.collection("products").insertOne({ ...doc, restaurant_id: RID });
+    return Response.json({ ok: true, product: doc });
+  } catch (err) {
+    console.error("[products POST] hata:", err);
+    return Response.json({ ok: false, error: "save_failed" }, { status: 500 });
+  }
+}
