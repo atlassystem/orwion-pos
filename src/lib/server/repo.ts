@@ -23,7 +23,10 @@ export const DEFAULT_BRANCH = BRANCHES[0].id;
 
 /** İlk giriş için varsayılan admin kimliği (seed). Kullanıcı sonra değiştirir. */
 export const DEFAULT_ADMIN_USERNAME = "admin";
-export const DEFAULT_ADMIN_PASSWORD = "Orwion!2026";
+// ⚠️ GÜVENLİK UYARISI: "1234" son derece zayıf, tahmin edilebilir bir şifredir.
+// Yalnızca istek üzerine (ilk kurulum/geliştirme kolaylığı) ayarlanmıştır.
+// PRODUCTION'da ilk girişten sonra MUTLAKA güçlü bir şifreyle değiştirilmelidir.
+export const DEFAULT_ADMIN_PASSWORD = "1234";
 
 export { getDb, RID };
 
