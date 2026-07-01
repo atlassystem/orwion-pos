@@ -5,7 +5,7 @@
 "use client";
 
 import type { Table, Product, Category } from "./pos-data";
-import type { StockItem, RecipeLine, Staff, Branch } from "./pos-modules";
+import type { StockItem, RecipeLine, Staff, Branch, Ticket, SnackState } from "./pos-modules";
 import type { SednaProduct, SednaCostMap } from "./sedna";
 
 export interface Bootstrap {
@@ -58,6 +58,39 @@ export async function fetchTables(branch: string): Promise<Table[] | null> {
   } catch {
     return null;
   }
+}
+
+/* ---------- Sıramatik fişleri ---------- */
+/** Bir şubenin aktif fişleri (hazırlanıyor + hazır). Yoklama için hafif. */
+export async function fetchTickets(branch: string): Promise<Ticket[] | null> {
+  try {
+    const res = await fetch(`/api/tickets?branch=${encodeURIComponent(branch)}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return Array.isArray(d.tickets) ? d.tickets : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Yeni fiş oluşturur (kiosk/personel). Sıra no sunucuda atanır; fişi döndürür. */
+export async function createTicket(
+  branch: string,
+  masa: string,
+  items: { pid: string; qty: number }[],
+): Promise<Ticket | null> {
+  const res = await fetch("/api/tickets", json("POST", { branch, masa, items }));
+  if (!res.ok) return null;
+  const d = await res.json();
+  return d.ticket ?? null;
+}
+
+/** Fiş durumunu değiştirir (hazır/teslim). */
+export async function setTicketState(no: number, state: SnackState): Promise<boolean> {
+  const res = await fetch(`/api/tickets/${no}`, json("PUT", { state }));
+  return res.ok;
 }
 
 /* ---------- Raporlar ---------- */

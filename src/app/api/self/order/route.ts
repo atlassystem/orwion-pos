@@ -2,9 +2,11 @@
    Body: { branch, no, items:[{pid,qty}] }. Yalnızca o şube+masanın adisyonuna
    KALEM EKLER (fiyat/iskonto/silme YOK). Ürünler route'una göre mutfak/bar'a düşer.
    Ödeme yok — personel POS'tan kapatır. Rate-limit'li. */
-import { getDb, byTenant } from "@/lib/server/repo";
+import { getDb, RID, byTenant, nextTicketNo } from "@/lib/server/repo";
 import { publishOrder } from "@/lib/server/order-events";
 import type { OrderItem } from "@/lib/pos-data";
+import type { Ticket } from "@/lib/pos-modules";
+import { sendToPrinter, buildKitchenTicket, buildGuestSlip, type PrintLine } from "@/lib/printer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,16 +59,19 @@ export async function POST(req: Request) {
     // Geçerli ürün kimlikleri (bilinmeyen pid yok sayılır).
     const products = await db
       .collection("products")
-      .find(byTenant(), { projection: { _id: 0, id: 1, name: 1 } })
+      .find(byTenant(), { projection: { _id: 0, id: 1, name: 1, route: 1 } })
       .toArray();
     const validIds = new Set(products.map((p) => p.id as string));
     const nameById = new Map(products.map((p) => [p.id as string, p.name as string]));
+    const routeById = new Map(products.map((p) => [p.id as string, p.route as string]));
 
     // Mevcut adisyon kalemleriyle birleştir (yalnızca qty artışı/ekleme).
     const items: OrderItem[] = (table.items ?? []).map((i: OrderItem) => ({ ...i }));
     let added = 0;
     // Bildirim özeti için bu istekte eklenen kalemler ("2× Ayran, 1× Lahmacun").
     const addedLines: string[] = [];
+    // Sıramatik fişi + yazıcı için bu istekte eklenen kalemler (birleşik).
+    const justOrdered = new Map<string, number>();
     for (const it of incoming) {
       const pid = String(it.pid ?? "");
       let qty = Math.floor(Number(it.qty) || 0);
@@ -77,6 +82,7 @@ export async function POST(req: Request) {
       else items.push({ pid, qty });
       added += qty;
       addedLines.push(`${qty}× ${nameById.get(pid) ?? pid}`);
+      justOrdered.set(pid, (justOrdered.get(pid) ?? 0) + qty);
     }
     if (added === 0) {
       return Response.json({ ok: false, error: "no_valid_items" }, { status: 400 });
@@ -105,7 +111,35 @@ export async function POST(req: Request) {
       ts: Date.now(),
     });
 
-    return Response.json({ ok: true, added });
+    // SIRAMATİK: bu QR siparişi için fiş oluştur (atomik sıra no) → hazırlık
+    // kuyruğuna düşer, çağrı ekranında yanar. Ayrı bir kayıt (adisyon hesap
+    // için; fiş hazırlık/çağrı için).
+    const ticketItems = [...justOrdered.entries()].map(([pid, qty]) => ({ pid, qty }));
+    const sira = await nextTicketNo(db);
+    const ticket: Ticket = {
+      no: sira,
+      branch_id: branch,
+      masa: no,
+      items: ticketItems,
+      state: "hazirlaniyor",
+      createdAt: new Date().toISOString(),
+      source: "qr",
+    };
+    await db.collection("tickets").insertOne({ ...ticket, restaurant_id: RID });
+
+    // Yazıcı köprüsü (bayrak kapalıysa no-op): mutfak fişi + misafir sıra kağıdı.
+    const mutfakLines: PrintLine[] = [];
+    const barLines: PrintLine[] = [];
+    for (const { pid, qty } of ticketItems) {
+      const line = { name: nameById.get(pid) ?? pid, qty };
+      if (routeById.get(pid) === "bar") barLines.push(line);
+      else mutfakLines.push(line);
+    }
+    void sendToPrinter(buildKitchenTicket(branch, no, sira, mutfakLines));
+    void sendToPrinter(buildGuestSlip(branch, no, sira, [...mutfakLines, ...barLines]));
+
+    // Misafire sıra no'sunu döndür (onay ekranında büyük gösterilir).
+    return Response.json({ ok: true, added, ticketNo: sira });
   } catch (err) {
     console.error("[self order] hata:", err);
     return Response.json({ ok: false, error: "order_failed" }, { status: 500 });

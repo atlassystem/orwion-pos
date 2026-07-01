@@ -68,6 +68,14 @@ export async function seedIfEmpty(db: Db): Promise<void> {
     // Order/payment'lar şubeye göre raporlanabilsin diye branch_id ile indeksli.
     db.collection("orders").createIndex({ restaurant_id: 1, branch_id: 1, paidAt: -1 }),
     db.collection("payments").createIndex({ restaurant_id: 1, branch_id: 1, paidAt: -1 }),
+    // Sıramatik fişleri: sıra no kiracı içinde benzersiz + şube/duruma göre sorgu.
+    db.collection("tickets").createIndex({ restaurant_id: 1, no: 1 }, { unique: true }),
+    db.collection("tickets").createIndex({ restaurant_id: 1, branch_id: 1, state: 1, createdAt: 1 }),
+    // meta anahtarları (menu_init, ticket_seq…) kiracı içinde tekil → çift sayaç olmaz.
+    db.collection("meta").createIndex(
+      { restaurant_id: 1, key: 1 },
+      { unique: true, partialFilterExpression: { key: { $type: "string" } } },
+    ),
   ]);
 
   const seedColl = async (name: string, docs: object[]) => {
@@ -156,6 +164,23 @@ async function ensureDefaultAdmin(db: Db): Promise<void> {
     byTenant({ id: target.id }),
     { $set: { username: DEFAULT_ADMIN_USERNAME, passwordHash } },
   );
+}
+
+/**
+ * Sıramatik için bir sonraki sıra numarasını ATOMİK üretir (kiracı bazında,
+ * çakışmasız, monoton). meta.ticket_seq sayacını $inc ile artırır (ilk çağrıda
+ * value=1). Numara = 100 + value → ilk fiş 101 (üç haneli, misafir dostu).
+ * İki cihaz aynı anda çağırsa bile findOneAndUpdate atomik → aynı numara iki
+ * kez verilmez.
+ */
+export async function nextTicketNo(db: Db): Promise<number> {
+  const r = await db.collection("meta").findOneAndUpdate(
+    byTenant({ key: "ticket_seq" }),
+    { $inc: { value: 1 } },
+    { upsert: true, returnDocument: "after" },
+  );
+  const v = (r?.value as number) ?? 1;
+  return 100 + v;
 }
 
 /** recipes koleksiyon belgelerini istemcinin beklediği Record<pid, lines>'a çevirir. */

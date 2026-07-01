@@ -298,3 +298,23 @@ export const STATION_META: Record<Station, { label: string; emoji: string; chip:
 
 /** Sıramatik fiş durumu. */
 export type SnackState = "hazirlaniyor" | "hazir" | "teslim";
+
+/** Sıramatik fişi (DB kaynaklı; masa bazlı). Sıra no sunucuda atomik atanır. */
+export interface Ticket {
+  /** Sıra numarası (kiracı içinde benzersiz, misafir dostu). */
+  no: number;
+  /** Hangi şube. */
+  branch_id: string;
+  /** Masa no (QR self-siparişte QR'dan gelir; kiosk'ta seçilir). */
+  masa: string;
+  /** Kalemler (Menü ürün id + adet). */
+  items: { pid: string; qty: number }[];
+  /** Durum: hazırlanıyor → hazır → teslim. */
+  state: SnackState;
+  /** Oluşturma zamanı (ISO). */
+  createdAt: string;
+  /** "Hazır" işaretlenme zamanı (ISO). */
+  readyAt?: string;
+  /** Kaynak: QR self-sipariş mi, kiosk (personel) mi. */
+  source: "qr" | "kiosk";
+}

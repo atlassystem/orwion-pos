@@ -606,7 +606,7 @@ export function PosApp() {
             <Garson tables={tables} onOpen={openTable} clockMin={clockMin} />
           )}
           {view === "mutfak" && <Mutfak tables={tables} clockMin={clockMin} />}
-          {view === "siramatik" && <Siramatik />}
+          {view === "siramatik" && <Siramatik branchId={activeBranch} />}
           {view === "menu" && <Menu products={branchProducts} cats={cats} />}
           {view === "menu_yonetim" && (
             <MenuYonetim

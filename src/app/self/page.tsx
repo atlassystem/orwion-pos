@@ -30,6 +30,7 @@ export default function SelfOrderPage() {
 
   const [busy, setBusy] = useState(false);
   const [doneCount, setDoneCount] = useState<number | null>(null);
+  const [doneTicket, setDoneTicket] = useState<number | null>(null); // sıra no
   const [err, setErr] = useState("");
   const [detail, setDetail] = useState<Product | null>(null); // içerik/alerjen modalı
 
@@ -141,6 +142,7 @@ export default function SelfOrderPage() {
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.ok) {
         setDoneCount(d.added ?? cartCount);
+        setDoneTicket(typeof d.ticketNo === "number" ? d.ticketNo : null);
         setCart({});
       } else if (res.status === 404) {
         setErr("Masa bulunamadı. Lütfen masayı yeniden seçin.");
@@ -163,12 +165,30 @@ export default function SelfOrderPage() {
             <Check className="h-8 w-8" strokeWidth={2.6} />
           </div>
           <h1 className="font-display text-xl font-extrabold text-ink">Siparişiniz alındı!</h1>
-          <p className="mt-2 text-sm text-ink2">
+
+          {doneTicket !== null && (
+            <div className="mx-auto mt-5 max-w-[15rem] rounded-2xl bg-gradient-to-br from-brand to-brand2 px-6 py-5 text-white shadow-sm">
+              <div className="text-[11px] font-bold tracking-widest uppercase opacity-80">
+                Sıra Numaranız
+              </div>
+              <div className="font-display tnum text-6xl leading-none font-extrabold">
+                {doneTicket}
+              </div>
+              <div className="mt-1.5 text-[12px] font-semibold opacity-90">
+                Masa {tableNo} · sıranız ekranda yanınca hazırdır
+              </div>
+            </div>
+          )}
+
+          <p className="mt-4 text-sm text-ink2">
             {branchName} · Masa {tableNo} için {doneCount} ürün mutfağa/bara iletildi.
             Hesabınız her şey dahil; ödeme gerekmez.
           </p>
           <button
-            onClick={() => setDoneCount(null)}
+            onClick={() => {
+              setDoneCount(null);
+              setDoneTicket(null);
+            }}
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand2"
           >
             <Plus className="h-4 w-4" strokeWidth={2.6} />

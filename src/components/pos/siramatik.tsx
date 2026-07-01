@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   TicketCheck,
   Monitor,
@@ -10,58 +10,66 @@ import {
   Printer,
   Check,
   Megaphone,
-  DoorOpen,
   Clock,
   ShoppingBag,
   ConciergeBell,
   ArrowRight,
+  Armchair,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATS, PRODUCTS, prodById, type Route } from "@/lib/pos-data";
-import { STATION_META, type SnackState } from "@/lib/pos-modules";
+import { STATION_META, type Ticket } from "@/lib/pos-modules";
+import { fetchTickets, createTicket, setTicketState } from "@/lib/pos-api";
 import { Tab, TopBar } from "./ui";
 import { usePerms } from "./perms";
 import { Food } from "./food";
 
-interface Line {
-  id: string;
-  qty: number;
-}
-interface Ticket {
-  no: number;
-  room: string;
-  items: Line[];
-  state: SnackState;
-  min: number;
-}
+type Line = { pid: string; qty: number };
 
-/** Başlangıç (demo) fişleri — Menü ürün id'leriyle. */
-const SEED: Ticket[] = [
-  { no: 146, room: "412", items: [{ id: "i2", qty: 1 }, { id: "d2", qty: 2 }], state: "hazir", min: 6 },
-  { no: 147, room: "228", items: [{ id: "z1", qty: 1 }, { id: "d4", qty: 2 }, { id: "t1", qty: 1 }], state: "hazirlaniyor", min: 3 },
-];
-
-const stationOf = (id: string): Route => prodById[id]?.route ?? "mutfak";
+const stationOf = (pid: string): Route => prodById[pid]?.route ?? "mutfak";
 const splitByStation = (items: Line[]) => ({
-  mutfak: items.filter((i) => stationOf(i.id) === "mutfak"),
-  bar: items.filter((i) => stationOf(i.id) === "bar"),
+  mutfak: items.filter((i) => stationOf(i.pid) === "mutfak"),
+  bar: items.filter((i) => stationOf(i.pid) === "bar"),
 });
+/** Fişin açılışından bu yana geçen dakika (createdAt'ten). */
+const waitMin = (t: Ticket): number =>
+  Math.max(0, Math.floor((Date.now() - new Date(t.createdAt).getTime()) / 60000));
 
-export function Siramatik() {
+export function Siramatik({ branchId }: { branchId: string }) {
   const [tab, setTab] = useState<"kiosk" | "kuyruk" | "ekran">("kiosk");
-  const [tickets, setTickets] = useState<Ticket[]>(SEED);
-  const [nextNo, setNextNo] = useState(148);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
 
-  const createTicket = (items: Line[], room: string) => {
-    const no = nextNo;
-    setTickets((ts) => [...ts, { no, room, items, state: "hazirlaniyor", min: 0 }]);
-    setNextNo((n) => n + 1);
-    return no;
+  // Aktif fişleri DB'den çek + canlı yokla (5 sn). Tüm cihazlar aynı kuyruğu görür.
+  const load = useCallback(async () => {
+    const fresh = await fetchTickets(branchId);
+    if (fresh) setTickets(fresh);
+  }, [branchId]);
+
+  useEffect(() => {
+    // İlk yükleme + 5 sn'de bir yoklama (harici sistemle senkron — polling deseni).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+    const i = setInterval(load, 5000);
+    return () => clearInterval(i);
+  }, [load]);
+
+  const addTicket = async (items: Line[], masa: string): Promise<Ticket | null> => {
+    const created = await createTicket(branchId, masa, items);
+    if (created) setTickets((ts) => [...ts, created]);
+    return created;
   };
-  const markReady = (no: number) =>
-    setTickets((ts) => ts.map((t) => (t.no === no ? { ...t, state: "hazir" } : t)));
-  const deliver = (no: number) =>
-    setTickets((ts) => ts.map((t) => (t.no === no ? { ...t, state: "teslim" } : t)));
+  const markReady = async (no: number) => {
+    setTickets((ts) =>
+      ts.map((t) => (t.no === no ? { ...t, state: "hazir", readyAt: new Date().toISOString() } : t)),
+    );
+    await setTicketState(no, "hazir");
+    load();
+  };
+  const deliver = async (no: number) => {
+    setTickets((ts) => ts.filter((t) => t.no !== no)); // teslim → kuyruktan çıkar
+    await setTicketState(no, "teslim");
+    load();
+  };
 
   const active = tickets.filter((t) => t.state === "hazirlaniyor");
   const ready = tickets.filter((t) => t.state === "hazir");
@@ -69,9 +77,9 @@ export function Siramatik() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TopBar
-        title="Sıramatik — Snack Bar"
+        title="Sıramatik"
         icon={TicketCheck}
-        sub="Her şey dahil · menüden sipariş, sıra numarası ve çağrı ekranı"
+        sub="Menüden sipariş · masa + sıra numarası · hazırlık kuyruğu ve çağrı ekranı"
         right={
           <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-bold text-brand">
             ✦ Her Şey Dahil
@@ -110,7 +118,7 @@ export function Siramatik() {
         </Tab>
       </div>
 
-      {tab === "kiosk" && <Kiosk onCreate={createTicket} />}
+      {tab === "kiosk" && <Kiosk onCreate={addTicket} />}
       {tab === "kuyruk" && <Kuyruk active={active} onReady={markReady} />}
       {tab === "ekran" && <Ekran ready={ready} active={active} onDeliver={deliver} />}
     </div>
@@ -120,37 +128,42 @@ export function Siramatik() {
 /* ============================================================
    Kiosk — Menü ürünlerinden sipariş (ödeme yok), sıra no + fiş
    ============================================================ */
-function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number }) {
+function Kiosk({ onCreate }: { onCreate: (items: Line[], masa: string) => Promise<Ticket | null> }) {
   const { canEdit } = usePerms();
   const [cat, setCat] = useState("hepsi");
   const [cart, setCart] = useState<Line[]>([]);
-  const [room, setRoom] = useState("");
+  const [masa, setMasa] = useState("");
   const [printed, setPrinted] = useState<Ticket | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const list = PRODUCTS.filter((p) => (cat === "hepsi" ? true : p.cat === cat));
   const count = cart.reduce((a, i) => a + i.qty, 0);
 
-  const add = (id: string) =>
+  const add = (pid: string) =>
     setCart((c) => {
-      const ex = c.find((i) => i.id === id);
-      return ex ? c.map((i) => (i.id === id ? { ...i, qty: i.qty + 1 } : i)) : [...c, { id, qty: 1 }];
+      const ex = c.find((i) => i.pid === pid);
+      return ex ? c.map((i) => (i.pid === pid ? { ...i, qty: i.qty + 1 } : i)) : [...c, { pid, qty: 1 }];
     });
-  const dec = (id: string) =>
+  const dec = (pid: string) =>
     setCart((c) =>
-      c.flatMap((i) => (i.id === id ? (i.qty <= 1 ? [] : [{ ...i, qty: i.qty - 1 }]) : [i])),
+      c.flatMap((i) => (i.pid === pid ? (i.qty <= 1 ? [] : [{ ...i, qty: i.qty - 1 }]) : [i])),
     );
 
-  const submit = () => {
-    if (!cart.length) return;
-    const no = onCreate(cart, room || "—");
-    setPrinted({ no, room: room || "—", items: cart, state: "hazirlaniyor", min: 0 });
-    setCart([]);
-    setRoom("");
+  const submit = async () => {
+    if (!cart.length || busy) return;
+    setBusy(true);
+    const created = await onCreate(cart, masa.trim() || "—");
+    setBusy(false);
+    if (created) {
+      setPrinted(created);
+      setCart([]);
+      setMasa("");
+    }
   };
 
   return (
     <div className="relative grid min-h-0 flex-1 grid-cols-[1fr_360px] gap-4 overflow-hidden px-7 pb-7">
-      {/* SOL: menü (Menü Yönetimi'ndeki tüm ürünler) */}
+      {/* SOL: menü */}
       <div className="flex min-h-0 flex-col">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
@@ -223,11 +236,11 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
 
         <div className="px-5 pt-3">
           <label className="flex items-center gap-2.5 rounded-xl border border-line2 bg-surface2 px-3.5 py-2.5 transition focus-within:border-brand/60 focus-within:bg-white">
-            <DoorOpen className="h-4.5 w-4.5 shrink-0 text-ink3" strokeWidth={2} />
+            <Armchair className="h-4.5 w-4.5 shrink-0 text-ink3" strokeWidth={2} />
             <input
-              value={room}
-              onChange={(e) => setRoom(e.target.value)}
-              placeholder="Oda no (opsiyonel)"
+              value={masa}
+              onChange={(e) => setMasa(e.target.value)}
+              placeholder="Masa no (opsiyonel)"
               className="w-full bg-transparent text-sm text-ink placeholder:text-ink3 outline-none"
             />
           </label>
@@ -246,9 +259,10 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
           ) : (
             <div className="space-y-2">
               {cart.map((i) => {
-                const p = prodById[i.id];
+                const p = prodById[i.pid];
+                if (!p) return null;
                 return (
-                  <div key={i.id} className="flex items-center gap-3 rounded-xl border border-line bg-surface2 p-2">
+                  <div key={i.pid} className="flex items-center gap-3 rounded-xl border border-line bg-surface2 p-2">
                     <Food img={p.img} emoji={p.emoji} grad={p.grad} className="h-10 w-10 shrink-0 rounded-lg" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-bold text-ink">{p.name}</div>
@@ -257,11 +271,11 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => dec(i.id)} disabled={!canEdit} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40">
+                      <button onClick={() => dec(i.pid)} disabled={!canEdit} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40">
                         <Minus className="h-3.5 w-3.5" strokeWidth={2.6} />
                       </button>
                       <span className="tnum w-5 text-center font-bold text-ink">{i.qty}</span>
-                      <button onClick={() => add(i.id)} disabled={!canEdit} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40">
+                      <button onClick={() => add(i.pid)} disabled={!canEdit} className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-white text-ink2 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40">
                         <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
                       </button>
                     </div>
@@ -275,11 +289,11 @@ function Kiosk({ onCreate }: { onCreate: (items: Line[], room: string) => number
         <div className="border-t border-line px-5 py-4">
           <button
             onClick={submit}
-            disabled={!cart.length || !canEdit}
+            disabled={!cart.length || !canEdit || busy}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 text-sm font-bold text-white shadow-sm shadow-brand/30 transition hover:bg-brand2 disabled:opacity-40 disabled:shadow-none"
           >
             <Printer className="h-4 w-4" strokeWidth={2.3} />
-            Sıra Al & Fiş Yazdır
+            {busy ? "Sıra Alınıyor…" : "Sıra Al & Fiş Yazdır"}
           </button>
           <p className="mt-2 text-center text-[11px] text-ink3">
             Fiş mutfağa ve bara düşer · misafire sıra numarası verilir
@@ -303,7 +317,7 @@ function PrintPreview({ ticket, onClose }: { ticket: Ticket; onClose: () => void
           </div>
           <div className="font-display text-6xl font-extrabold tnum leading-none">{ticket.no}</div>
           <div className="mt-1 text-[12px] font-semibold opacity-90">
-            Oda {ticket.room} · sıranız ekranda yanınca alın
+            Masa {ticket.masa} · sıranız ekranda yanınca alın
           </div>
         </div>
         <div className="space-y-3 px-6 py-5">
@@ -334,15 +348,18 @@ function StationLines({ title, lines }: { title: string; lines: Line[] }) {
     <div>
       <div className="mb-1 text-[11px] font-bold tracking-wide text-ink3 uppercase">{title}</div>
       <div className="space-y-1">
-        {lines.map((i) => (
-          <div key={i.id} className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 text-ink">
-              <span className="text-base">{prodById[i.id].emoji}</span>
-              {prodById[i.id].name}
-            </span>
-            <span className="tnum font-bold text-ink2">×{i.qty}</span>
-          </div>
-        ))}
+        {lines.map((i) => {
+          const p = prodById[i.pid];
+          return (
+            <div key={i.pid} className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2 text-ink">
+                <span className="text-base">{p?.emoji ?? "🍽️"}</span>
+                {p?.name ?? i.pid}
+              </span>
+              <span className="tnum font-bold text-ink2">×{i.qty}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -365,10 +382,10 @@ function Kuyruk({ active, onReady }: { active: Ticket[]; onReady: (no: number) =
                   <span className="font-display tnum text-lg font-extrabold">{t.no}</span>
                 </span>
                 <div className="leading-tight">
-                  <div className="text-sm font-bold text-ink">Oda {t.room}</div>
+                  <div className="text-sm font-bold text-ink">Masa {t.masa}</div>
                   <div className="tnum flex items-center gap-1 text-[11px] text-ink3">
                     <Clock className="h-3 w-3" strokeWidth={2.4} />
-                    {t.min} dk
+                    {waitMin(t)} dk
                   </div>
                 </div>
               </div>
@@ -392,7 +409,7 @@ function Kuyruk({ active, onReady }: { active: Ticket[]; onReady: (no: number) =
         <div className="pos-card col-span-full grid place-items-center py-12 text-center text-sm text-ink3">
           <div>
             <ChefHat className="mx-auto mb-2 h-8 w-8 text-ink3/60" strokeWidth={1.6} />
-            Hazırlanacak sipariş yok. Kiosk&apos;tan sipariş alın.
+            Hazırlanacak sipariş yok. QR&apos;dan veya Kiosk&apos;tan sipariş bekleniyor.
           </div>
         </div>
       )}
@@ -408,16 +425,19 @@ function KuyrukStation({ title, lines }: { title: string; lines: Line[] }) {
         <div className="text-[12px] text-ink3">—</div>
       ) : (
         <div className="space-y-1.5">
-          {lines.map((i) => (
-            <div key={i.id} className="flex items-center gap-2 text-sm">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-brand text-xs font-extrabold text-white tnum">
-                {i.qty}
-              </span>
-              <span className="text-ink">
-                {prodById[i.id].emoji} {prodById[i.id].name}
-              </span>
-            </div>
-          ))}
+          {lines.map((i) => {
+            const p = prodById[i.pid];
+            return (
+              <div key={i.pid} className="flex items-center gap-2 text-sm">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-brand text-xs font-extrabold text-white tnum">
+                  {i.qty}
+                </span>
+                <span className="text-ink">
+                  {p?.emoji ?? "🍽️"} {p?.name ?? i.pid}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -474,7 +494,7 @@ function Ekran({
                   <div className="font-display text-6xl font-extrabold tnum leading-none text-emerald-300 blink">
                     {t.no}
                   </div>
-                  <div className="mt-2 text-[12px] font-semibold text-white/60">Oda {t.room}</div>
+                  <div className="mt-2 text-[12px] font-semibold text-white/60">Masa {t.masa}</div>
                   <div className="mt-1 text-[10px] font-bold text-emerald-300/0 transition group-hover:text-emerald-300">
                     teslim et
                   </div>
